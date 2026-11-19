@@ -51,14 +51,20 @@
             <option value="mix">Varios juegos</option>
           </select>
           <input id="filter-text" type="search" placeholder="Buscar…">
-          <button id="btn-select" class="ghost" title="Elige varios vídeos para unirlos en uno">Crear montaje</button>
+          <button id="btn-select" class="tool t-montage" title="Elige varios vídeos para unirlos en uno">
+            <svg viewBox="0 0 24 24"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5M2 12l10 5 10-5"/></svg>
+            <span class="lbl">Crear montaje</span>
+          </button>
         </div>
       </div>
       <div id="selbar" class="selbar hidden">
         <span id="sel-text">Haz clic en los vídeos en el orden en que quieres que salgan</span>
         <label class="sel-fade"><input id="sel-fade" type="checkbox" checked> Fundido entre clips</label>
         <button id="sel-cancel" class="ghost small-btn">Cancelar</button>
-        <button id="sel-create" class="primary small-btn" disabled>Crear montaje</button>
+        <button id="sel-create" class="tool t-montage" disabled>
+          <svg viewBox="0 0 24 24"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5M2 12l10 5 10-5"/></svg>
+          <span class="lbl">Crear montaje</span>
+        </button>
       </div>
       <div id="grid" class="grid"></div>
       <div id="empty" class="empty hidden">
@@ -105,21 +111,40 @@
           <button id="m-out" class="ghost small-btn" title="Tecla O">Fin aquí</button>
           <button id="m-preview" class="ghost small-btn" disabled>▶ Ver selección</button>
           <button id="m-clear" class="ghost small-btn" disabled>Quitar</button>
-          <button id="m-trim" class="primary small-btn" disabled>Crear recorte</button>
-          <span class="sep"></span>
-          <select id="m-speed" class="small-select" title="Velocidad de la cámara lenta">
-            <option value="2">0,5×</option>
-            <option value="4">0,25×</option>
-          </select>
-          <button id="m-slow" class="ghost small-btn" disabled title="Pone el tramo seleccionado a cámara lenta en un vídeo nuevo">Cámara lenta</button>
-          <button id="m-gif" class="ghost small-btn" disabled title="GIF del tramo seleccionado (máx. 15 s), copiado para pegar">GIF</button>
         </div>
         <div class="modal-actions">
-          <button id="m-note" class="ghost" title="Tecla N">+ Nota</button>
-          <button id="m-discord" class="ghost" title="Lo comprime al límite de Discord y lo copia para pegarlo con Ctrl+V">Discord</button>
           <button id="m-fav" class="ghost">☆ Favorito</button>
           <button id="m-reveal" class="ghost">Mostrar en carpeta</button>
           <button id="m-delete" class="danger">Eliminar</button>
+        </div>
+        <div class="tools" role="toolbar" aria-label="Herramientas de edición">
+          <span class="tools-title">Herramientas</span>
+          <button id="m-trim" class="tool t-trim" disabled title="Guarda el tramo seleccionado como un clip nuevo">
+            <svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.12 15.88M14.47 14.48 20 20M8.12 8.12 12 12"/></svg>
+            <span class="lbl">Recortar</span>
+          </button>
+          <div class="tool-split t-slow">
+            <button id="m-slow" class="tool t-slow" disabled title="Pone el tramo seleccionado a cámara lenta en un vídeo nuevo">
+              <svg viewBox="0 0 24 24"><path d="M10 2h4M12 14l3-3"/><circle cx="12" cy="14" r="8"/></svg>
+              <span class="lbl">Cámara lenta</span>
+            </button>
+            <select id="m-speed" class="tool-select" title="Velocidad de la cámara lenta">
+              <option value="2">0,5×</option>
+              <option value="4">0,25×</option>
+            </select>
+          </div>
+          <button id="m-gif" class="tool t-gif" disabled title="GIF del tramo seleccionado (máx. 15 s), copiado para pegar">
+            <svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="2.2"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/></svg>
+            <span class="lbl">GIF</span>
+          </button>
+          <button id="m-discord" class="tool t-discord" title="Lo comprime al límite de Discord y lo copia para pegarlo con Ctrl+V">
+            <svg viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>
+            <span class="lbl">Discord</span>
+          </button>
+          <button id="m-note" class="tool t-note" title="Añade una nota en este instante (tecla N)">
+            <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+            <span class="lbl">Nota</span>
+          </button>
         </div>
       </div>
     </div>

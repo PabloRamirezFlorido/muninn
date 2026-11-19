@@ -211,7 +211,7 @@ async function createMontage() {
   const btn = $('sel-create');
   const ids = [...selected];
   btn.disabled = true;
-  btn.textContent = 'Creando montaje…';
+  setLabel(btn, 'Creando montaje…');
   $('sel-cancel').disabled = true;
   try {
     const it = await api.invoke('library:montage', ids, { fade: $('sel-fade').checked ? 0.5 : 0 });
@@ -222,10 +222,16 @@ async function createMontage() {
   } catch (e) {
     alert(`No se pudo crear el montaje: ${cleanError(e)}`);
   } finally {
-    btn.textContent = 'Crear montaje';
+    setLabel(btn, 'Crear montaje');
     $('sel-cancel').disabled = false;
     updateSelbar();
   }
+}
+
+// Los botones de herramienta llevan icono + <span class="lbl">: solo se cambia el texto.
+function setLabel(btn, text) {
+  const lbl = btn.querySelector('.lbl');
+  if (lbl) lbl.textContent = text; else btn.textContent = text;
 }
 
 function cleanError(e) {
@@ -348,8 +354,8 @@ function openItem(it, { select } = {}) {
   video().src = it.fileUrl;
   if (select) video().addEventListener('loadedmetadata', () => { video().currentTime = select[0]; }, { once: true });
   $('m-fav').textContent = it.favorite ? '★ Favorito' : '☆ Favorito';
-  $('m-discord').textContent = 'Discord';
-  $('m-gif').textContent = 'GIF';
+  setLabel($('m-discord'), 'Discord');
+  setLabel($('m-gif'), 'GIF');
   updateTrim();
   renderContext();
   renderTimeline();
@@ -398,7 +404,7 @@ function updateTrim() {
   $('m-range').textContent = trimIn == null && trimOut == null ? 'Elige un momento o marca inicio/fin'
     : `${trimIn == null ? '—' : fmtDur(trimIn)} → ${trimOut == null ? '—' : fmtDur(trimOut)}`;
   $('m-trim').disabled = !ok;
-  $('m-trim').textContent = ok ? `Crear recorte (${fmtDur(trimOut - trimIn)})` : 'Crear recorte';
+  setLabel($('m-trim'), ok ? `Recortar ${fmtDur(trimOut - trimIn)}` : 'Recortar');
   $('m-preview').disabled = !ok;
   $('m-clear').disabled = trimIn == null && trimOut == null;
   $('m-slow').disabled = !ok;
@@ -689,7 +695,7 @@ $('sel-create').addEventListener('click', createMontage);
 $('m-slow').addEventListener('click', async () => {
   const btn = $('m-slow');
   btn.disabled = true;
-  btn.textContent = 'Creando…';
+  setLabel(btn, 'Creando…');
   try {
     const it = await api.invoke('library:slowmo', current.id, trimIn, trimOut, Number($('m-speed').value));
     await loadLibrary();
@@ -697,7 +703,7 @@ $('m-slow').addEventListener('click', async () => {
   } catch (e) {
     alert(`No se pudo crear la cámara lenta: ${cleanError(e)}`);
   } finally {
-    btn.textContent = 'Cámara lenta';
+    setLabel(btn, 'Cámara lenta');
     updateTrim();
   }
 });
@@ -706,12 +712,12 @@ $('m-gif').addEventListener('click', async () => {
   const it = current;
   const ok = trimIn != null && trimOut != null && trimOut - trimIn >= 1;
   btn.disabled = true;
-  btn.textContent = 'Creando GIF…';
+  setLabel(btn, 'Creando GIF…');
   try {
     const { size } = await api.invoke('library:gif', it.id, ok ? trimIn : 0, ok ? trimOut : duration());
-    if (current === it) btn.textContent = `GIF copiado (${(size / 1048576).toFixed(1)} MB)`;
+    if (current === it) setLabel(btn, `GIF copiado · ${(size / 1048576).toFixed(1)} MB`);
   } catch (e) {
-    if (current === it) btn.textContent = 'GIF';
+    if (current === it) setLabel(btn, 'GIF');
     alert(`No se pudo crear el GIF: ${cleanError(e)}`);
   } finally {
     updateTrim();
@@ -721,12 +727,12 @@ $('m-discord').addEventListener('click', async () => {
   const btn = $('m-discord');
   const it = current;
   btn.disabled = true;
-  btn.textContent = 'Comprimiendo…';
+  setLabel(btn, 'Comprimiendo…');
   try {
     const { size } = await api.invoke('library:discord', it.id);
-    if (current === it) btn.textContent = `Copiado (${(size / 1048576).toFixed(1)} MB) · Ctrl+V en Discord`;
+    if (current === it) setLabel(btn, `Copiado · ${(size / 1048576).toFixed(1)} MB · Ctrl+V`);
   } catch (e) {
-    if (current === it) btn.textContent = 'Discord';
+    if (current === it) setLabel(btn, 'Discord');
     alert(String(e.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''));
   } finally {
     btn.disabled = false;
@@ -799,15 +805,15 @@ video().addEventListener('timeupdate', () => {
 $('m-trim').addEventListener('click', async () => {
   const btn = $('m-trim');
   btn.disabled = true;
-  btn.textContent = 'Recortando…';
+  setLabel(btn, 'Recortando…');
   try {
     const it = await api.invoke('library:trim', current.id, trimIn, trimOut);
     await loadLibrary();
     openItem(items.find((x) => x.id === it.id) || it);
   } catch (e) {
-    alert(`No se pudo recortar: ${e.message}`);
+    alert(`No se pudo recortar: ${cleanError(e)}`);
   } finally {
-    btn.textContent = 'Crear recorte';
+    setLabel(btn, 'Recortar');
     updateTrim();
   }
 });
