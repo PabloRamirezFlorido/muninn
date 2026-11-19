@@ -10,7 +10,8 @@
   "scripts": {
     "setup": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/setup.ps1",
     "start": "electron .",
-    "dist": "electron-builder --win nsis"
+    "dist": "electron-builder --win nsis",
+    "release": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/release.ps1"
   },
   "devDependencies": {
     "electron": "^45.1.0",
@@ -42,6 +43,7 @@
       "icon": "assets/icon.png"
     },
     "nsis": {
+      "artifactName": "Muninn-Setup-${version}.${ext}",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,

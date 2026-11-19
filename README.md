@@ -2,6 +2,14 @@
 
 Grabación en segundo plano para juegos al estilo Medal: buffer circular, clips automáticos de los mejores momentos, partidas completas y un límite de espacio. Se llama así por Muninn, el cuervo "memoria" de Odín, que sobrevolaba el mundo y volvía contando lo que había visto.
 
+## Descargar
+
+**[⬇ Descargar la última versión](../../releases/latest)**
+
+En esa página, descarga `Muninn-Setup-x.y.z.exe` y ejecútalo. Si ya tenías Muninn instalado, se actualiza conservando tu configuración y tus vídeos.
+
+Requisitos: Windows 10 u 11. Recomendable una GPU NVIDIA, AMD o Intel con codificador por hardware.
+
 Hasta la versión 1.2 se llamaba **Jugadas**:
 - El `appId` (`com.pablo.jugadas`) se mantiene a propósito, para que el instalador de Muninn actualice la instalación anterior en vez de crear otra aparte.
 - La primera vez que arranca, Muninn copia `settings.json` y `encoders.json` de `%APPDATA%\Jugadas` a `%APPDATA%\Muninn`.
@@ -25,7 +33,10 @@ Requisitos: Windows 10/11 y Node.js 20 o superior.
 
 - `npm start`: abre la app en modo desarrollo.
 - `npm start -- --demo`: simula una partida de LoL (kills, doble kill, robo de Barón y victoria) para probar todo el flujo sin abrir el juego.
-- `npm run dist`: genera el instalador en `dist/Muninn Setup x.y.z.exe`.
+- `npm run dist`: genera el instalador en `dist/Muninn-Setup-x.y.z.exe`.
+- `npm run release`: publica la versión de `package.json` como Release de GitHub con el instalador adjunto ([tools/release.ps1](tools/release.ps1)).
+  - Exige que no haya cambios sin commit, sube los commits, compila y usa como notas el mensaje del último commit.
+  - Si la versión ya está publicada, no hace nada: sube antes el número de versión.
 
 Al instalar, si `npm install` bloquea los scripts de instalación, ejecuta `node node_modules/electron/install.js`.
 
