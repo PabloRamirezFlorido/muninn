@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src file: data:; media-src file:">
+  <title>Muninn</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <aside class="side">
+    <div class="brand"><img src="../../assets/icon-64.png" alt=""><span>Muninn</span></div>
+    <nav>
+      <button data-view="clips" class="active">Clips</button>
+      <button data-view="matches">Partidas</button>
+      <button data-view="favorites">Favoritos</button>
+      <button data-view="settings">Ajustes</button>
+    </nav>
+    <div class="storage">
+      <div class="storage-head"><span>Espacio</span><span id="storage-text">—</span></div>
+      <div class="bar"><div id="bar-matches" class="seg matches"></div><div id="bar-clips" class="seg clips"></div></div>
+      <div class="legend"><span><i class="matches"></i>Partidas</span><span><i class="clips"></i>Clips</span></div>
+      <button class="link" id="open-folder">Abrir carpeta</button>
+    </div>
+  </aside>
+
+  <main>
+    <header class="top">
+      <div class="status">
+        <span id="rec-dot" class="rec-dot"></span>
+        <div>
+          <div id="status-title">Iniciando…</div>
+          <div id="status-sub" class="muted small"></div>
+        </div>
+      </div>
+      <div class="actions">
+        <button id="btn-pause" class="ghost">Pausar</button>
+        <button id="btn-clip" class="primary">Guardar clip</button>
+      </div>
+    </header>
+    <div id="error" class="error hidden"><span id="error-text"></span><button class="link" id="error-close">Cerrar</button></div>
+
+    <section id="view-library">
+      <div class="toolbar">
+        <h1 id="lib-title">Clips</h1>
+        <div class="filters">
+          <select id="filter-game">
+            <option value="">Todos los juegos</option>
+            <option value="lol">League of Legends</option>
+            <option value="valorant">Valorant</option>
+            <option value="desktop">Escritorio</option>
+          </select>
+          <input id="filter-text" type="search" placeholder="Buscar…">
+        </div>
+      </div>
+      <div id="grid" class="grid"></div>
+      <div id="empty" class="empty hidden">
+        <p>Aún no hay nada aquí.</p>
+        <p class="muted">Abre League of Legends o Valorant y los mejores momentos se guardarán solos. También puedes pulsar la tecla rápida en cualquier momento.</p>
+      </div>
+    </section>
+
+    <section id="view-settings" class="hidden">
+      <div class="toolbar"><h1>Ajustes</h1><span id="saved-hint" class="muted small"></span></div>
+      <form id="settings" class="settings" autocomplete="off"></form>
+    </section>
+  </main>
+
+  <div id="modal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <input id="m-title" class="title-input" maxlength="80">
+        <button id="m-close" class="icon" title="Cerrar">✕</button>
+      </div>
+      <video id="m-video" controls preload="metadata"></video>
+      <div class="timeline">
+        <div id="m-track" class="tl-track" title="Haz clic para ir a ese punto">
+          <div id="m-sel" class="tl-sel hidden">
+            <div class="tl-handle" data-edge="in" title="Arrastra para mover el inicio"></div>
+            <div class="tl-handle" data-edge="out" title="Arrastra para mover el final"></div>
+          </div>
+          <div id="m-markers"></div>
+          <div id="m-head" class="tl-head"></div>
+        </div>
+        <div class="tl-times muted small"><span>0:00</span><span id="m-total">0:00</span></div>
+      </div>
+      <div id="m-events" class="chips"></div>
+      <div class="modal-foot">
+        <div class="trim">
+          <button id="m-in" class="ghost small-btn" title="Tecla I">Inicio aquí</button>
+          <span id="m-range" class="muted small">—</span>
+          <button id="m-out" class="ghost small-btn" title="Tecla O">Fin aquí</button>
+          <button id="m-preview" class="ghost small-btn" disabled>▶ Ver selección</button>
+          <button id="m-clear" class="ghost small-btn" disabled>Quitar</button>
+          <button id="m-trim" class="primary small-btn" disabled>Crear recorte</button>
+        </div>
+        <div class="modal-actions">
+          <button id="m-fav" class="ghost">☆ Favorito</button>
+          <button id="m-reveal" class="ghost">Mostrar en carpeta</button>
+          <button id="m-delete" class="danger">Eliminar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

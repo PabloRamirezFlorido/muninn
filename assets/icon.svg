@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Muninn: cabeza de cuervo de perfil con el ojo rojo encendido (piloto de grabación). -->
+  <defs>
+    <clipPath id="sq"><rect width="100" height="100" rx="22"/></clipPath>
+    <radialGradient id="bg" cx="0.62" cy="0.38" r="0.75">
+      <stop offset="0" stop-color="#0E1E24"/>
+      <stop offset="0.6" stop-color="#081217"/>
+      <stop offset="1" stop-color="#04080A"/>
+    </radialGradient>
+    <linearGradient id="head" x1="0.3" y1="0" x2="0.6" y2="1">
+      <stop offset="0" stop-color="#1B2930"/>
+      <stop offset="0.45" stop-color="#0D161B"/>
+      <stop offset="1" stop-color="#05090C"/>
+    </linearGradient>
+    <linearGradient id="beak" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3A444D"/>
+      <stop offset="0.55" stop-color="#252C33"/>
+      <stop offset="1" stop-color="#12161A"/>
+    </linearGradient>
+    <linearGradient id="wing" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#15212A"/>
+      <stop offset="1" stop-color="#070C10"/>
+    </linearGradient>
+    <radialGradient id="iris" cx="0.4" cy="0.38" r="0.65">
+      <stop offset="0" stop-color="#FF7A62"/>
+      <stop offset="0.45" stop-color="#E3242B"/>
+      <stop offset="1" stop-color="#7E0B10"/>
+    </radialGradient>
+    <radialGradient id="glow">
+      <stop offset="0" stop-color="#FF2A2A" stop-opacity="0.6"/>
+      <stop offset="0.5" stop-color="#FF2A2A" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#FF2A2A" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <g clip-path="url(#sq)">
+    <rect width="100" height="100" fill="url(#bg)"/>
+    <g transform="translate(-24 -6.4) scale(1.22)">
+      <!-- cabeza y cuello, con plumas erizadas en la garganta -->
+      <path d="M0 58C6 40 22 22 44 18C58 16 68 22 75 33C84 40 92 50 97 58C98 61 97 63 95 64C90 60 82 56 74 54L72 60L69 58L68 66L65 63L63 72L60 68L58 78L56 74C58 84 62 92 64 100L0 100Z" fill="url(#head)"/>
+      <!-- brillo húmedo del plumaje -->
+      <path d="M28 30C36 24 45 22 54 23" fill="none" stroke="#2C4552" stroke-width="2" stroke-linecap="round" opacity="0.35"/>
+      <g fill="none" stroke="#1E2B33" stroke-width="1.2" stroke-linecap="round">
+        <path d="M30 30q6-2 10 2M42 26q6-1 9 3M52 28q5 0 8 4M24 40q6-2 10 2M36 38q6-1 10 3M48 40q5 0 8 4M20 50q6-2 10 2M34 50q6-1 9 3M46 52q5 1 8 5M58 46q4 1 6 5"/>
+      </g>
+      <!-- hombro con plumas en escama -->
+      <path d="M0 66C14 60 30 66 40 78C46 86 48 94 48 100L0 100Z" fill="url(#wing)"/>
+      <g fill="none" stroke="#263642" stroke-width="1.2" stroke-linecap="round">
+        <path d="M2 70q4 4 8 0M10 68q4 4 8 0M18 68q4 4 8 1M26 71q4 4 7 2M6 78q4 4 8 0M14 77q4 4 8 0M22 77q4 4 8 1M30 80q4 4 7 2M2 86q4 4 8 0M10 86q4 4 8 0M18 86q4 4 8 0M26 86q4 4 8 1M34 88q4 4 7 2"/>
+      </g>
+      <!-- pico -->
+      <path d="M75 33C84 40 92 50 97 58C98 61 97 63 95 64C90 60 82 56 74 54C73 47 73 39 75 33Z" fill="url(#beak)"/>
+      <path d="M76 34C84 41 91 49 95.5 57" fill="none" stroke="#6E7A86" stroke-width="1.3" stroke-linecap="round"/>
+      <path d="M74.5 47C83 49 89 54 94 60.5" fill="none" stroke="#07090B" stroke-width="1.2"/>
+      <g stroke="#070B0E" stroke-width="1.8" stroke-linecap="round" fill="none">
+        <path d="M74 38q-5 1-8 4M74 42q-6 1-9 5M74 46q-5 2-8 6"/>
+      </g>
+      <!-- luz de borde -->
+      <path d="M3 51C9 37 24 21 44 18C58 16 68 22 75 33C84 40 92 50 97 58" fill="none" stroke="#9CC3D3" stroke-width="1.2" stroke-linecap="round" opacity="0.6"/>
+      <!-- ojo encendido -->
+      <circle cx="66" cy="38" r="15" fill="url(#glow)"/>
+      <circle cx="66" cy="38" r="7" fill="#030506"/>
+      <circle cx="66" cy="38" r="5.6" fill="url(#iris)"/>
+      <circle cx="66" cy="38" r="2.3" fill="#1F0000"/>
+      <circle cx="64.3" cy="36.3" r="1.2" fill="#FFFFFF"/>
+      <circle cx="68" cy="40.2" r="0.6" fill="#FFB3A8" opacity="0.8"/>
+    </g>
+  </g>
+</svg>

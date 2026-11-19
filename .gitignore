@@ -1,0 +1,12 @@
+# Dependencias y compilados (se regeneran con npm install / npm run dist)
+node_modules/
+dist/
+
+# Binarios que genera tools/setup.ps1 (ffmpeg.exe pesa ~160 MB, más que el límite de GitHub)
+vendor/ffmpeg/
+vendor/procwatch/*.exe
+
+# Varios
+*.log
+.DS_Store
+Thumbs.db
