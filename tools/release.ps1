@@ -5,7 +5,9 @@
 #     último commit (sin las líneas "Co-Authored-By"), o el archivo de -NotesFile.
 # Uso: npm run release   (o: powershell -ExecutionPolicy Bypass -File tools/release.ps1 [-SkipBuild] [-Installer ruta.exe] [-NotesFile notas.md])
 param([switch]$SkipBuild, [string]$Installer, [string]$NotesFile)
-$ErrorActionPreference = 'Stop'
+# 'Continue': en Windows PowerShell 5, con 'Stop' cualquier texto que git/gh escriban en stderr
+# (aunque esté redirigido) aborta el script. Los fallos se detectan con $LASTEXITCODE.
+$ErrorActionPreference = 'Continue'
 $root = Split-Path $PSScriptRoot -Parent
 Set-Location $root
 # git y gh pueden no estar aún en el PATH de una consola abierta antes de instalarlos.
@@ -15,11 +17,12 @@ $version = (Get-Content (Join-Path $root 'package.json') -Raw | ConvertFrom-Json
 $tag = "v$version"
 
 if (git status --porcelain) { throw 'Hay cambios sin commit: haz commit antes de publicar.' }
-gh release view $tag 2>$null | Out-Null
+gh release view $tag *> $null
 if ($LASTEXITCODE -eq 0) { throw "La release $tag ya existe: sube la versión en package.json antes de publicar." }
 
 Write-Host "Subiendo commits..."
-git push --quiet 2>&1 | Out-Null
+git push --quiet *> $null
+if ($LASTEXITCODE -ne 0) { throw 'No se pudieron subir los commits (git push)' }
 
 if (-not $SkipBuild) {
   Write-Host "Compilando el instalador $version..."
