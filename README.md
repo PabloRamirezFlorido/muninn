@@ -4,7 +4,7 @@ Grabación en segundo plano para juegos al estilo Medal: buffer circular, clips 
 
 ## Descargar
 
-**[⬇ Descargar la última versión](../../releases/latest)**
+**[Descargar la última versión](../../releases/latest)**
 
 En esa página, descarga `Muninn-Setup-x.y.z.exe` y ejecútalo. Si ya tenías Muninn instalado, se actualiza conservando tu configuración y tus vídeos.
 
