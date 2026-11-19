@@ -441,87 +441,188 @@ async function saveTitle() {
 
 // ---------- ajustes ----------
 
-const SCHEMA = [
+// Secciones de Ajustes: menú lateral (con un resumen del estado actual) y, a la derecha, la
+// sección elegida en una sola columna. `when` atenúa una fila si ese ajuste está desactivado.
+// `color` es la clase con el tono de la sección (mismo sistema que las herramientas: --tc/--tt).
+const RES_LABELS = { native: 'Nativa', 1440: '1440p', 1080: '1080p', 720: '720p' };
+const QUALITY_LABELS = { high: 'Alta', balanced: 'Equilibrada', saver: 'Ahorro' };
+const onOff = (v) => (v ? 'Sí' : 'No');
+const pctLabel = (v) => `${Math.round((v ?? 1) * 100)} %`;
+
+const SECTIONS = [
   {
-    title: 'Grabación',
-    fields: [
-      { key: 'recordMode', label: 'Cuándo grabar', type: 'select', options: { game: 'Solo con un juego abierto', always: 'Siempre' } },
-      { key: 'captureMode', label: 'Qué grabar', hint: 'La ventana del juego no incluye otras ventanas ni el escritorio aunque estén encima', type: 'select', options: { game: 'Solo la ventana del juego', monitor: 'Pantalla completa' } },
-      { key: 'monitor', label: 'Monitor', hint: 'Para pantalla completa o sin juego abierto (0 = principal)', type: 'number', min: 0, max: 8 },
-      { key: 'resolution', label: 'Resolución', type: 'select', options: { native: 'Nativa', 1440: '1440p', 1080: '1080p', 720: '720p' } },
-      { key: 'fps', label: 'FPS', type: 'select', options: { 30: '30', 60: '60', 120: '120', 144: '144' }, number: true },
-      { key: 'quality', label: 'Calidad', hint: 'A 1440p60: alta ≈ 7 GB/h, equilibrada ≈ 4,3 GB/h, ahorro ≈ 2,7 GB/h', type: 'select', options: { high: 'Alta', balanced: 'Equilibrada', saver: 'Ahorro de espacio' } },
-      { key: 'encoder', label: 'Codificador', type: 'encoder' },
-      { key: 'bufferSeconds', label: 'Buffer fuera de partida', hint: 'Segundos que se guardan en memoria de disco', type: 'number', min: 30, max: 1800, unit: 's' },
-      { key: 'clipSeconds', label: 'Duración del clip manual', type: 'number', min: 5, max: 600, unit: 's' },
-      { key: 'hotkeyClip', label: 'Tecla para guardar clip', hint: 'Haz clic y pulsa la combinación', type: 'hotkey' },
-    ],
-  },
-  {
-    title: 'Audio',
-    fields: [
-      { key: 'audio.system', label: 'Audio del juego / sistema', type: 'switch' },
-      { key: 'audio.systemVolume', label: 'Volumen del sistema', hint: 'Se graba sin tener en cuenta el volumen de Windows; bájalo si los clips suenan fuertes', type: 'range', min: 0, max: 1.5, step: 0.05 },
-      { key: 'audio.mic', label: 'Micrófono', type: 'switch' },
-      { key: 'audio.micDeviceId', label: 'Dispositivo', type: 'mic' },
-      { key: 'audio.micVolume', label: 'Volumen del micro', type: 'range', min: 0, max: 2, step: 0.05 },
-    ],
-  },
-  {
-    title: 'Almacenamiento',
-    fields: [
-      { key: 'libraryDir', label: 'Carpeta de vídeos', hint: 'Cambiarla reinicia la app', type: 'folder' },
-      { key: 'storageQuotaGB', label: 'Espacio máximo', hint: 'Al superarlo se borran primero las partidas más antiguas y luego los clips. Los favoritos nunca se borran.', type: 'number', min: 1, max: 10000, unit: 'GB' },
-      { key: 'saveFullMatches', label: 'Guardar partidas completas', type: 'switch' },
-      { key: 'maxClipSeconds', label: 'Duración máxima de un clip', hint: 'Los momentos seguidos se unen hasta este límite', type: 'number', min: 20, max: 300, unit: 's' },
-      { key: 'discordLimitMB', label: 'Tamaño para Discord', hint: '10 MB sin Nitro, 50 con Nitro Basic, 500 con Nitro. Las exportaciones van a la carpeta "discord".', type: 'number', min: 5, max: 500, unit: 'MB' },
-    ],
-  },
-  {
-    title: 'League of Legends',
-    note: 'Usa la Live Client Data API oficial de Riot y solo detecta tus eventos (no los de otros jugadores). Los interruptores deciden qué genera un clip. Todos los momentos se marcan igualmente en la barra de la partida completa.',
-    fields: [
-      { key: 'lol.enabled', label: 'Detectar momentos automáticamente', type: 'switch' },
-      { key: 'lol.kill', label: 'Kills', type: 'switch' },
-      { key: 'lol.multikillMin', label: 'Multikill a partir de', type: 'select', options: { 2: 'Doble', 3: 'Triple', 4: 'Cuádruple', 5: 'Penta', 99: 'Nunca' }, number: true },
-      { key: 'lol.ace', label: 'Ace', type: 'switch' },
-      { key: 'lol.firstBlood', label: 'Primera sangre', type: 'switch' },
-      { key: 'lol.steals', label: 'Robo de dragón / barón / heraldo', type: 'switch' },
-      { key: 'lol.objectives', label: 'Cualquier objetivo (dragón, barón…)', type: 'switch' },
-      { key: 'lol.turrets', label: 'Torres e inhibidores', type: 'switch' },
-      { key: 'lol.assists', label: 'Asistencias', type: 'switch' },
-      { key: 'lol.deaths', label: 'Muertes', type: 'switch' },
-      { key: 'lol.victory', label: 'Victoria (final de partida)', type: 'switch' },
-      { key: 'lol.preSeconds', label: 'Segundos antes del momento', type: 'number', min: 3, max: 120, unit: 's' },
-      { key: 'lol.postSeconds', label: 'Segundos después', type: 'number', min: 0, max: 60, unit: 's' },
-    ],
-  },
-  {
-    title: 'Valorant',
-    note: 'Riot no ofrece API de kills para Valorant. Se usa la presencia del cliente local para saber cuándo estás en partida y el marcador de cada ronda. Para jugadas concretas, usa la tecla rápida.',
-    fields: [
-      { key: 'valorant.enabled', label: 'Detectar partidas y rondas', type: 'switch' },
-      { key: 'valorant.roundWin', label: 'Clip al ganar una ronda', type: 'switch' },
-      { key: 'valorant.roundLoss', label: 'Clip al perder una ronda', type: 'switch' },
-      { key: 'valorant.preSeconds', label: 'Segundos antes del fin de ronda', type: 'number', min: 5, max: 120, unit: 's' },
-      { key: 'valorant.postSeconds', label: 'Segundos después', type: 'number', min: 0, max: 30, unit: 's' },
-    ],
-  },
-  {
-    title: 'General',
-    fields: [
-      { key: 'customProcesses', label: 'Otros juegos', hint: 'Ejecutables que activan la grabación, separados por comas (p. ej. cs2.exe)', type: 'list' },
-      { key: 'notify', label: 'Aviso en pantalla al guardar', type: 'switch' },
+    id: 'rec', title: 'Grabación', color: 's-rec',
+    icon: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5" fill="currentColor"/>',
+    desc: 'Qué se graba, cuándo y con qué calidad.',
+    summary: (s) => `${RES_LABELS[s.resolution] || s.resolution} · ${s.fps} fps · ${QUALITY_LABELS[s.quality] || s.quality}`,
+    groups: [
       {
-        key: 'launchAtStartup', label: 'Iniciar con Windows', type: 'switch',
-        hint: 'Bajo impacto: arranca en la bandeja con prioridad baja y espera 30 s antes de vigilar juegos',
-        warn: () => (state.settings.launchAtStartup && state.status?.loginItem === 'blocked'
-          ? 'Windows lo tiene desactivado: actívalo en Administrador de tareas → Aplicaciones de arranque' : null),
+        title: 'Qué y cuándo',
+        fields: [
+          { key: 'recordMode', label: 'Cuándo grabar', type: 'seg', options: { game: 'Con un juego abierto', always: 'Siempre' } },
+          { key: 'captureMode', label: 'Qué grabar', hint: 'La ventana del juego no incluye otras ventanas ni el escritorio aunque estén encima', type: 'seg', options: { game: 'Ventana del juego', monitor: 'Pantalla completa' } },
+          { key: 'monitor', label: 'Monitor', hint: 'Para pantalla completa o sin juego abierto (0 = principal)', type: 'number', min: 0, max: 8 },
+        ],
       },
-      { key: 'startMinimized', label: 'Arrancar minimizada en la bandeja', hint: 'También al abrirla tú, no solo al iniciar Windows', type: 'switch' },
+      {
+        title: 'Imagen',
+        fields: [
+          // Lista (no objeto): JavaScript pondría primero las claves numéricas (720p…) y "Nativa" al final.
+          { key: 'resolution', label: 'Resolución', type: 'seg', options: [['native', 'Nativa'], ['1440', '1440p'], ['1080', '1080p'], ['720', '720p']] },
+          { key: 'fps', label: 'FPS', type: 'seg', options: { 30: '30', 60: '60', 120: '120', 144: '144' }, number: true },
+          { key: 'quality', label: 'Calidad', hint: 'A 1440p60: alta ≈ 7 GB/h, equilibrada ≈ 4,3 GB/h, ahorro ≈ 2,7 GB/h', type: 'seg', options: { high: 'Alta', balanced: 'Equilibrada', saver: 'Ahorro' } },
+          { key: 'encoder', label: 'Codificador', hint: 'Automático elige el mejor que funcione en tu equipo', type: 'encoder' },
+        ],
+      },
+      {
+        title: 'Clips manuales',
+        fields: [
+          { key: 'hotkeyClip', label: 'Tecla para guardar clip', hint: 'Haz clic y pulsa la combinación', type: 'hotkey' },
+          { key: 'clipSeconds', label: 'Duración del clip manual', type: 'number', min: 5, max: 600, unit: 's' },
+          { key: 'bufferSeconds', label: 'Buffer fuera de partida', hint: 'Cuánto se conserva grabado cuando no estás en partida', type: 'number', min: 30, max: 1800, unit: 's' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'audio', title: 'Audio', color: 's-audio',
+    icon: '<path d="M11 5 6 9H2v6h4l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/>',
+    desc: 'Sonido del juego y del micrófono en tus grabaciones.',
+    summary: (s) => `Juego ${s.audio.system ? pctLabel(s.audio.systemVolume) : 'no'} · Micro ${s.audio.mic ? pctLabel(s.audio.micVolume) : 'no'}`,
+    groups: [
+      {
+        title: 'Juego y sistema',
+        fields: [
+          { key: 'audio.system', label: 'Grabar el audio del juego / sistema', type: 'switch' },
+          { key: 'audio.systemVolume', label: 'Volumen', hint: 'Se graba sin tener en cuenta el volumen de Windows; bájalo si los clips suenan fuertes', type: 'range', min: 0, max: 1.5, step: 0.05, when: 'audio.system' },
+        ],
+      },
+      {
+        title: 'Micrófono',
+        fields: [
+          { key: 'audio.mic', label: 'Grabar el micrófono', type: 'switch' },
+          { key: 'audio.micDeviceId', label: 'Dispositivo', type: 'mic', when: 'audio.mic' },
+          { key: 'audio.micVolume', label: 'Volumen', type: 'range', min: 0, max: 2, step: 0.05, when: 'audio.mic' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'storage', title: 'Almacenamiento', color: 's-storage',
+    icon: '<rect x="2" y="13" width="20" height="8" rx="2"/><path d="M5.5 13 8 4h8l2.5 9M6 17h.01M10 17h.01"/>',
+    desc: 'Dónde se guardan los vídeos y cuánto espacio pueden ocupar.',
+    summary: (s) => `${s.storageQuotaGB} GB · partidas: ${s.saveFullMatches ? 'sí' : 'no'}`,
+    groups: [
+      {
+        title: 'Biblioteca',
+        fields: [
+          { key: 'libraryDir', label: 'Carpeta de vídeos', hint: 'Cambiarla reinicia la app', type: 'folder' },
+          {
+            key: 'storageQuotaGB', label: 'Espacio máximo', type: 'number', min: 1, max: 10000, unit: 'GB', usage: true,
+            hint: 'Al superarlo se borran primero las partidas más antiguas y luego los clips. Los favoritos nunca se borran.',
+          },
+          { key: 'saveFullMatches', label: 'Guardar partidas completas', hint: 'Es lo que más ocupa; los clips sueltos se guardan igualmente', type: 'switch' },
+        ],
+      },
+      {
+        title: 'Clips y exportación',
+        fields: [
+          { key: 'maxClipSeconds', label: 'Duración máxima de un clip', hint: 'Los momentos seguidos se unen hasta este límite', type: 'number', min: 20, max: 300, unit: 's' },
+          { key: 'discordLimitMB', label: 'Tamaño para Discord', hint: '10 MB sin Nitro, 50 con Nitro Basic, 500 con Nitro', type: 'number', min: 5, max: 500, unit: 'MB' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'general', title: 'General', color: 's-general',
+    icon: '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
+    desc: 'Arranque, avisos y otros juegos.',
+    summary: (s) => `Inicio con Windows: ${onOff(s.launchAtStartup)}`,
+    groups: [
+      {
+        title: 'Inicio',
+        fields: [
+          {
+            key: 'launchAtStartup', label: 'Iniciar con Windows', type: 'switch',
+            hint: 'Bajo impacto: arranca en la bandeja con prioridad baja y espera 30 s antes de vigilar juegos',
+            warn: () => (state.settings.launchAtStartup && state.status?.loginItem === 'blocked'
+              ? 'Windows lo tiene desactivado: actívalo en Administrador de tareas → Aplicaciones de arranque' : null),
+          },
+          { key: 'startMinimized', label: 'Arrancar minimizada en la bandeja', hint: 'También al abrirla tú, no solo al iniciar Windows', type: 'switch' },
+        ],
+      },
+      {
+        title: 'Avisos',
+        fields: [{ key: 'notify', label: 'Aviso en pantalla al guardar un clip', type: 'switch' }],
+      },
+      {
+        title: 'Otros juegos',
+        fields: [{ key: 'customProcesses', label: 'Ejecutables que activan la grabación', hint: 'Separados por comas, p. ej. cs2.exe, eldenring.exe', type: 'list' }],
+      },
+    ],
+  },
+  {
+    id: 'lol', title: 'League of Legends', color: 's-lol',
+    icon: '<path d="M14.5 17.5 3 6V3h3l11.5 11.5M13 19l6-6M16 16l4 4M19 21l2-2"/>',
+    desc: 'Usa la API oficial de Riot y solo detecta tus momentos. Todos se marcan en la barra de la partida; aquí eliges cuáles generan además un clip.',
+    summary: (s) => {
+      if (!s.lol.enabled) return 'Desactivado';
+      const n = ['kill', 'ace', 'firstBlood', 'steals', 'objectives', 'turrets', 'assists', 'deaths', 'victory'].filter((k) => s.lol[k]).length
+        + (s.lol.multikillMin < 99 ? 1 : 0);
+      return `${n} tipos de momento con clip`;
+    },
+    groups: [
+      { fields: [{ key: 'lol.enabled', label: 'Detectar momentos automáticamente', type: 'switch' }] },
+      {
+        title: 'Generan un clip',
+        fields: [
+          { key: 'lol.kill', label: 'Kills', type: 'switch', when: 'lol.enabled' },
+          { key: 'lol.multikillMin', label: 'Multikill a partir de', type: 'seg', options: { 2: 'Doble', 3: 'Triple', 4: 'Cuádruple', 5: 'Penta', 99: 'Nunca' }, number: true, when: 'lol.enabled' },
+          { key: 'lol.ace', label: 'Ace', type: 'switch', when: 'lol.enabled' },
+          { key: 'lol.firstBlood', label: 'Primera sangre', type: 'switch', when: 'lol.enabled' },
+          { key: 'lol.steals', label: 'Robo de dragón / barón / heraldo', type: 'switch', when: 'lol.enabled' },
+          { key: 'lol.objectives', label: 'Cualquier objetivo (dragón, barón…)', type: 'switch', when: 'lol.enabled' },
+          { key: 'lol.turrets', label: 'Torres e inhibidores', type: 'switch', when: 'lol.enabled' },
+          { key: 'lol.assists', label: 'Asistencias', type: 'switch', when: 'lol.enabled' },
+          { key: 'lol.deaths', label: 'Muertes', type: 'switch', when: 'lol.enabled' },
+          { key: 'lol.victory', label: 'Victoria (final de partida)', type: 'switch', when: 'lol.enabled' },
+        ],
+      },
+      {
+        title: 'Duración de cada clip',
+        fields: [
+          { key: 'lol.preSeconds', label: 'Segundos antes del momento', type: 'number', min: 3, max: 120, unit: 's', when: 'lol.enabled' },
+          { key: 'lol.postSeconds', label: 'Segundos después', type: 'number', min: 0, max: 60, unit: 's', when: 'lol.enabled' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'valorant', title: 'Valorant', color: 's-valorant',
+    icon: '<circle cx="12" cy="12" r="9"/><path d="M22 12h-4M6 12H2M12 6V2M12 22v-4"/>',
+    desc: 'Riot no ofrece API de kills para Valorant: se detectan las partidas y el marcador de cada ronda. Para jugadas concretas, usa la tecla rápida.',
+    summary: (s) => (s.valorant.enabled ? `Rondas: ${[s.valorant.roundWin && 'ganadas', s.valorant.roundLoss && 'perdidas'].filter(Boolean).join(' y ') || 'ninguna'}` : 'Desactivado'),
+    groups: [
+      { fields: [{ key: 'valorant.enabled', label: 'Detectar partidas y rondas', type: 'switch' }] },
+      {
+        title: 'Generan un clip',
+        fields: [
+          { key: 'valorant.roundWin', label: 'Ronda ganada', type: 'switch', when: 'valorant.enabled' },
+          { key: 'valorant.roundLoss', label: 'Ronda perdida', type: 'switch', when: 'valorant.enabled' },
+        ],
+      },
+      {
+        title: 'Duración de cada clip',
+        fields: [
+          { key: 'valorant.preSeconds', label: 'Segundos antes del fin de ronda', type: 'number', min: 5, max: 120, unit: 's', when: 'valorant.enabled' },
+          { key: 'valorant.postSeconds', label: 'Segundos después', type: 'number', min: 0, max: 30, unit: 's', when: 'valorant.enabled' },
+        ],
+      },
     ],
   },
 ];
+
+let settingsSection = (() => { try { return localStorage.getItem('muninn.settingsSection') || 'rec'; } catch { return 'rec'; } })();
 
 const getPath = (obj, key) => key.split('.').reduce((o, k) => (o == null ? o : o[k]), obj);
 function patchFor(key, value) {
@@ -533,13 +634,30 @@ function patchFor(key, value) {
   return patch;
 }
 
-let savedTimer;
 async function save(key, value) {
   state.settings = await api.invoke('settings:update', patchFor(key, value));
-  $('saved-hint').textContent = 'Guardado';
-  clearTimeout(savedTimer);
-  savedTimer = setTimeout(() => { $('saved-hint').textContent = ''; }, 1500);
+  // Aviso visual en la fila cambiada + resúmenes del menú y filas dependientes al día, sin
+  // repintar toda la sección (se perdería el foco del campo que estás editando).
+  const row = document.querySelector(`#settings .row[data-key="${key}"]`);
+  if (row) {
+    row.classList.remove('saved');
+    void row.offsetWidth; // reinicia la animación si se guarda dos veces seguidas
+    row.classList.add('saved');
+    clearTimeout(row.savedTimer);
+    row.savedTimer = setTimeout(() => row.classList.remove('saved'), 1600);
+  }
+  refreshSettingsState();
   if (state.status) renderStatus(state.status);
+}
+
+function refreshSettingsState() {
+  for (const r of document.querySelectorAll('#settings .row[data-when]')) {
+    r.classList.toggle('off', !getPath(state.settings, r.dataset.when));
+  }
+  for (const b of document.querySelectorAll('#settings .set-nav button[data-id]')) {
+    const sec = SECTIONS.find((x) => x.id === b.dataset.id);
+    b.querySelector('.s').textContent = sec.summary(state.settings);
+  }
 }
 
 function toAccelerator(e) {
@@ -603,6 +721,20 @@ function field(f) {
         Object.entries(f.options).map(([v, l]) => el('option', { value: v }, l)));
       input.value = String(value);
       break;
+    case 'seg': {
+      // Botones segmentados: todas las opciones a la vista y la elegida resaltada.
+      const opts = Array.isArray(f.options) ? f.options : Object.entries(f.options);
+      const buttons = opts.map(([v, l]) => el('button', {
+        type: 'button', class: String(value) === v ? 'on' : '',
+        onclick: () => {
+          buttons.forEach((b) => b.classList.toggle('on', b === btn(v)));
+          save(f.key, f.number ? Number(v) : v);
+        },
+      }, l));
+      const btn = (v) => buttons[opts.findIndex(([k]) => k === v)];
+      input = el('div', { class: 'seg-group', role: 'group' }, buttons);
+      break;
+    }
     case 'encoder':
       input = el('select', { onchange: (e) => save(f.key, e.target.value) },
         ['auto', ...state.encoders].map((v) => el('option', { value: v }, ENCODER_NAMES[v] || v)));
@@ -647,19 +779,58 @@ function field(f) {
     default:
       input = el('span');
   }
-  const unit = f.unit ? el('span', { class: 'muted small' }, f.unit) : null;
+  const unit = f.unit ? el('span', { class: 'unit' }, f.unit) : null;
   const warn = f.warn ? f.warn() : null;
-  return el('div', { class: 'row' },
-    el('label', {}, f.label, f.hint ? el('span', { class: 'hint' }, f.hint) : null,
+  let usage = null;
+  if (f.usage && state.status) {
+    // Barra con lo que ya ocupa la biblioteca frente al máximo elegido.
+    const u = state.status.usage;
+    const pct = Math.min(100, (u.total / (value * 1024 ** 3)) * 100);
+    const bar = el('span', { class: 'mini-bar' }, el('i'));
+    bar.firstChild.style.width = `${pct}%`;
+    usage = el('span', { class: 'hint usage' }, bar, `Ahora ocupa ${fmtBytes(u.total)} (${Math.round(pct)} %)`);
+  }
+  const row = el('div', { class: 'row' },
+    el('div', { class: 'row-label' },
+      el('span', { class: 'row-title' }, f.label, el('span', { class: 'ok', title: 'Guardado' }, '✓ Guardado')),
+      f.hint ? el('span', { class: 'hint' }, f.hint) : null,
+      usage,
       warn ? el('span', { class: 'hint warn' }, warn) : null),
-    unit ? el('div', { class: 'folder' }, input, unit) : input);
+    el('div', { class: 'row-control' }, input, unit));
+  row.dataset.key = f.key;
+  if (f.when) {
+    row.dataset.when = f.when;
+    row.classList.toggle('off', !getPath(state.settings, f.when));
+  }
+  return row;
 }
 
 function renderSettings() {
-  $('settings').replaceChildren(...SCHEMA.map((sec) => el('fieldset', {},
-    el('legend', {}, sec.title),
-    sec.note ? el('div', { class: 'note' }, sec.note) : null,
-    sec.fields.map(field))));
+  const sec = SECTIONS.find((s) => s.id === settingsSection) || SECTIONS[0];
+  const icon = (s, cls) => {
+    const span = el('span', { class: cls });
+    span.innerHTML = `<svg viewBox="0 0 24 24">${s.icon}</svg>`; // iconos fijos del propio código
+    return span;
+  };
+  const nav = el('nav', { class: 'set-nav', 'aria-label': 'Secciones de ajustes' }, SECTIONS.map((s) => {
+    const b = el('button', {
+      type: 'button', class: `${s.color}${s.id === sec.id ? ' active' : ''}`,
+      onclick: () => {
+        settingsSection = s.id;
+        try { localStorage.setItem('muninn.settingsSection', s.id); } catch { /* sin almacenamiento */ }
+        renderSettings();
+        $('view-settings').scrollTop = 0;
+      },
+    }, icon(s, 'ico'), el('span', { class: 'nav-text' }, el('span', { class: 't' }, s.title), el('span', { class: 's' }, s.summary(state.settings))));
+    b.dataset.id = s.id;
+    return b;
+  }));
+  const panel = el('div', { class: `set-panel ${sec.color}` },
+    el('div', { class: 'set-head' }, icon(sec, 'ico big'), el('div', {}, el('h2', {}, sec.title), el('p', {}, sec.desc))),
+    sec.groups.map((g) => el('div', { class: 'set-group' },
+      g.title ? el('h3', {}, g.title) : null,
+      el('div', { class: 'set-card' }, g.fields.map(field)))));
+  $('settings').replaceChildren(el('div', { class: 'set-layout' }, nav, panel));
 }
 
 // ---------- eventos ----------
