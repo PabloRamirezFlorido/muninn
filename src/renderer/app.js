@@ -279,12 +279,49 @@ function selectMoment(t) {
   video().play().catch(() => {});
 }
 
+// Categorías para filtrar los momentos del reproductor (una partida larga puede tener 80+).
+const EVENT_CATEGORIES = [
+  { id: 'kill', label: 'Kills', color: EVENT_COLORS.kill, types: ['kill'] },
+  { id: 'multi', label: 'Multikills', color: EVENT_COLORS.multikill, types: ['multikill', 'ace', 'firstblood'] },
+  { id: 'death', label: 'Muertes', color: EVENT_COLORS.death, types: ['death', 'defeat', 'round_loss'] },
+  { id: 'assist', label: 'Asistencias', color: EVENT_COLORS.assist, types: ['assist'] },
+  { id: 'obj', label: 'Objetivos', color: EVENT_COLORS.steal, types: ['steal', 'objective', 'structure'] },
+  { id: 'note', label: 'Notas', color: EVENT_COLORS.note, types: ['note'] },
+];
+const categoryOf = (type) => (EVENT_CATEGORIES.find((c) => c.types.includes(type)) || { id: 'other' }).id;
+const hiddenCategories = new Set(); // se mantiene al abrir otros vídeos durante la sesión
+
+function renderFilters() {
+  const counts = {};
+  for (const ev of current.events || []) {
+    const c = categoryOf(ev.type);
+    counts[c] = (counts[c] || 0) + 1;
+  }
+  const present = EVENT_CATEGORIES.filter((c) => counts[c.id]);
+  // Con una sola categoría (o ninguna) los filtros no aportan nada.
+  if (present.length < 2) { $('m-filters').replaceChildren(); return; }
+  $('m-filters').replaceChildren(el('span', { class: 'lbl-f' }, 'Mostrar'), ...present.map((c) => {
+    const b = el('button', {
+      type: 'button', class: `ev-filter${hiddenCategories.has(c.id) ? ' off' : ''}`,
+      title: hiddenCategories.has(c.id) ? `Mostrar ${c.label.toLowerCase()}` : `Ocultar ${c.label.toLowerCase()}`,
+      onclick: () => {
+        if (hiddenCategories.has(c.id)) hiddenCategories.delete(c.id); else hiddenCategories.add(c.id);
+        renderTimeline();
+      },
+    }, el('i'), c.label, el('b', {}, String(counts[c.id])));
+    b.style.setProperty('--c', c.color);
+    return b;
+  }));
+}
+
 function renderTimeline() {
   if (!current) return;
   $('m-total').textContent = fmtDur(duration());
+  renderFilters();
   const markers = [];
   const chips = [];
   for (const ev of current.events || []) {
+    if (hiddenCategories.has(categoryOf(ev.type))) continue;
     const t = momentTime(ev);
     const color = EVENT_COLORS[ev.type] || '#e5e7eb';
     if (t == null || t < 0 || t > duration() + 1) {
