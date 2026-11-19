@@ -29,6 +29,7 @@ const DEFAULTS = {
   startMinimized: false,
   launchAtStartup: false,
   customProcesses: [],         // ejecutables extra que activan la grabación (p. ej. "cs2.exe")
+  discordLimitMB: 10,          // límite de subida de Discord sin Nitro
   lol: {
     enabled: true,
     kill: true,

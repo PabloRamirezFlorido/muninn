@@ -320,6 +320,21 @@ function setupIpc() {
   ipcMain.handle('library:remove', (_e, id) => library.remove(id));
   ipcMain.handle('library:reveal', (_e, id) => { const it = library.get(id); if (it) shell.showItemInFolder(it.file); });
   ipcMain.handle('library:trim', async (_e, id, start, end) => serialize(await library.trim(id, start, end, recorder.encoder)));
+  ipcMain.handle('library:note-add', (_e, id, at, text) => serialize(library.addNote(id, at, text)));
+  ipcMain.handle('library:note-remove', (_e, id, at) => serialize(library.removeNote(id, at)));
+  ipcMain.handle('library:discord', async (_e, id) => {
+    await encodersReady;
+    const { file, size } = await library.exportForDiscord(id, Number(S().discordLimitMB) || 10, chooseEncoder());
+    // Se deja el archivo en el portapapeles para pegarlo directamente en Discord (Ctrl+V).
+    await new Promise((resolve) => {
+      const quoted = `'${file.replace(/'/g, "''")}'`; // comillas simples de PowerShell
+      require('child_process').execFile('powershell', ['-NoProfile', '-Command', `Set-Clipboard -LiteralPath ${quoted}`],
+        { windowsHide: true }, () => resolve());
+    });
+    log('exportado para Discord', path.basename(file), size);
+    return { file, size };
+  });
+  ipcMain.handle('library:reveal-file', (_e, file) => shell.showItemInFolder(file));
   ipcMain.handle('library:open-folder', () => shell.openPath(S().libraryDir));
   ipcMain.handle('clip:manual', () => manualClip());
   ipcMain.handle('recording:toggle', () => { togglePause(); return paused; });
@@ -455,7 +470,11 @@ app.whenReady().then(() => {
 
   for (const [client, id] of [[lol, 'lol'], [valorant, 'valorant']]) {
     client.on('matchStart', (info) => { log('inicio partida', id, info); director.matchStart(id, info); });
-    client.on('highlight', (ev) => { log('momento', id, ev.label, { grabando: recorder.running }); if (recorder.running) director.highlight(id, ev); });
+    client.on('event', (ev) => {
+      log('momento', id, ev.label, { clip: ev.clip, grabando: recorder.running });
+      if (ev.clip && recorder.running) director.highlight(id, ev);
+      else director.mark(id, ev);
+    });
     client.on('matchEnd', (info) => { log('fin partida', id, info); director.matchEnd(id, info); });
   }
 
@@ -480,13 +499,18 @@ function runDemo() {
   demo = true;
   updateRecording();
   const at = (s, fn) => setTimeout(fn, s * 1000);
-  const ev = (type, label, priority) => ({ type, label, priority, wall: Date.now(), pre: 6, post: 2 });
+  const ev = (type, label, priority, clip = true) => ({ type, label, priority, clip, wall: Date.now(), pre: 6, post: 2 });
   at(6, () => lol.emit('matchStart', { champion: 'Ahri' }));
-  at(14, () => lol.emit('highlight', ev('kill', 'Kill', 1)));
-  at(15, () => lol.emit('highlight', ev('kill', 'Kill', 1)));
-  at(15.5, () => lol.emit('highlight', ev('multikill', 'Doble kill', 4)));
-  at(26, () => lol.emit('highlight', ev('steal', 'Robo de Barón', 7)));
-  at(34, () => lol.emit('matchEnd', { result: 'win', champion: 'Ahri' }));
+  at(10, () => lol.emit('event', ev('assist', 'Asistencia', 0, false)));
+  at(14, () => lol.emit('event', ev('kill', 'Kill', 1)));
+  at(15, () => lol.emit('event', ev('kill', 'Kill', 1)));
+  at(15.5, () => lol.emit('event', ev('multikill', 'Doble kill', 4)));
+  at(17, () => lol.emit('event', ev('death', 'Muerte', 0, false)));
+  at(26, () => lol.emit('event', ev('steal', 'Robo de Barón', 7)));
+  at(34, () => lol.emit('matchEnd', {
+    result: 'win', champion: 'Ahri',
+    stats: { champion: 'Ahri', kills: 2, deaths: 1, assists: 1, cs: 187, vision: 21, level: 14, gameTime: 1712 },
+  }));
 }
 
 app.on('window-all-closed', () => { /* sigue en la bandeja */ });

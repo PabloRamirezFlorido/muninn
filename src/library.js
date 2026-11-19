@@ -53,7 +53,7 @@ class Library extends EventEmitter {
     return path.join(dir, `${stamp()}_${safeName(GAME_NAMES[game] || game)}_${safeName(title)}.mp4`);
   }
 
-  async add({ type, game, title, events = [], file, duration, recordedAt }) {
+  async add({ type, game, title, events = [], file, duration, recordedAt, stats = null }) {
     const id = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
     const thumb = path.join(this.root, 'thumbs', `${id}.jpg`);
     try {
@@ -66,6 +66,7 @@ class Library extends EventEmitter {
       duration, size: fs.statSync(file).size,
       createdAt: recordedAt || Date.now(),
       favorite: false,
+      ...(stats ? { stats } : {}),
     };
     this.items.push(item);
     this.save();
@@ -80,6 +81,57 @@ class Library extends EventEmitter {
     if (typeof patch.favorite === 'boolean') it.favorite = patch.favorite;
     this.save();
     return it;
+  }
+
+  /** Nota propia en un instante del vídeo (at = hora real en ms, como los demás momentos). */
+  addNote(id, at, text) {
+    const it = this.get(id);
+    const clean = String(text || '').trim().slice(0, 200);
+    if (!it || !clean || !Number.isFinite(at)) return it;
+    it.events = [...(it.events || []), { type: 'note', label: clean, at: Math.round(at) }]
+      .sort((a, b) => (a.at || 0) - (b.at || 0));
+    this.save();
+    return it;
+  }
+
+  removeNote(id, at) {
+    const it = this.get(id);
+    if (!it) return it;
+    it.events = (it.events || []).filter((e) => !(e.type === 'note' && e.at === at));
+    this.save();
+    return it;
+  }
+
+  /**
+   * Recodifica un vídeo para que pese menos de `limitMB` (límite de subida de Discord) y
+   * devuelve la ruta. Se baja la resolución si el bitrate disponible no da para más.
+   */
+  async exportForDiscord(id, limitMB, encoder) {
+    const it = this.get(id);
+    if (!it) throw new Error('Vídeo no encontrado');
+    const limit = limitMB * 1024 * 1024;
+    const audioKbps = 96;
+    const dir = path.join(this.root, 'discord');
+    fs.mkdirSync(dir, { recursive: true });
+    const out = path.join(dir, `${path.basename(it.file, '.mp4')}_discord.mp4`);
+    // Margen del 8 % para la cabecera del mp4 y la variación del encoder.
+    let videoKbps = Math.floor((limit * 0.92 * 8) / it.duration / 1000) - audioKbps;
+    if (videoKbps < 250) {
+      const maxSec = Math.floor((limit * 0.92 * 8) / ((250 + audioKbps) * 1000));
+      throw new Error(`Demasiado largo para ${limitMB} MB: recórtalo a menos de ${maxSec} s`);
+    }
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const height = videoKbps >= 5000 ? 1080 : videoKbps >= 2200 ? 720 : 540;
+      const venc = encoder.endsWith('_nvenc')
+        ? [encoder, '-preset', 'p5', '-rc', 'cbr', '-b:v', `${videoKbps}k`, '-maxrate', `${videoKbps}k`, '-bufsize', `${videoKbps * 2}k`]
+        : ['libx264', '-preset', 'medium', '-b:v', `${videoKbps}k`, '-maxrate', `${videoKbps}k`, '-bufsize', `${videoKbps * 2}k`];
+      await run(['-y', '-i', it.file, '-map', '0:v:0', '-map', '0:a?', '-vf', `scale=-2:'min(${height},ih)'`,
+        '-c:v', ...venc, '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', `${audioKbps}k`, '-movflags', '+faststart', out]);
+      const size = fs.statSync(out).size;
+      if (size <= limit) return { file: out, size };
+      videoKbps = Math.floor(videoKbps * (limit / size) * 0.9); // se pasó: se ajusta y se repite
+    }
+    throw new Error('No se pudo dejar por debajo del límite');
   }
 
   remove(id) {
@@ -99,7 +151,8 @@ class Library extends EventEmitter {
     const toWall = it.createdAt + end * 1000;
     const events = (it.events || []).filter((e) => !e.at || (e.at >= fromWall && e.at <= toWall));
     let title = `${it.title} (recorte)`;
-    const timed = events.filter((e) => e.at);
+    // El título sale de los momentos buenos: muertes, asistencias y notas no lo nombran.
+    const timed = events.filter((e) => e.at && !['note', 'death', 'assist', 'defeat', 'round_loss'].includes(e.type));
     if (it.type === 'match' && timed.length) {
       // "Victoria · Caitlyn" -> "Pentakill · Caitlyn" según los momentos del tramo.
       const labels = [...new Set(timed.map((e) => e.label))].slice(0, 3).join(' + ');

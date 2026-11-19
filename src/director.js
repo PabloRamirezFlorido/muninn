@@ -54,7 +54,7 @@ class Director extends EventEmitter {
     const job = this.recorder.saveRange(m.startedAt, Date.now(), out)
       .then(({ duration, wallStart }) => this.library.add({
         type: 'match', game, title, file: out, duration, recordedAt: wallStart,
-        events: m.events || [],
+        events: m.events || [], stats: info.stats || null,
       }))
       .then((item) => this.emit('saved', item))
       .catch((e) => this.emit('failed', e))
@@ -62,12 +62,17 @@ class Director extends EventEmitter {
     this.track(job);
   }
 
+  /** Momento que no genera clip: solo queda marcado en la barra de la partida completa. */
+  mark(game, ev) {
+    if (this.match) (this.match.events ||= []).push({ type: ev.type, label: ev.label, at: ev.wall });
+    this.emit('event', { game, ...ev });
+  }
+
   highlight(game, ev) {
     const s = this.getSettings();
     const start = ev.wall - ev.pre * 1000;
     const end = ev.wall + ev.post * 1000;
-    if (this.match) (this.match.events ||= []).push({ type: ev.type, label: ev.label, at: ev.wall });
-    this.emit('event', { game, ...ev });
+    this.mark(game, ev);
 
     const p = this.pending;
     if (p && p.game === game && start <= p.end + GAP_MS && Math.max(end, p.end) - p.start <= s.maxClipSeconds * 1000) {
@@ -114,7 +119,15 @@ class Director extends EventEmitter {
   saveClip(game, title, start, end, events, pinId) {
     const out = this.library.newPath('clip', game, title);
     const job = this.recorder.saveRange(start, end, out)
-      .then(({ duration, wallStart }) => this.library.add({ type: 'clip', game, title, events, file: out, duration, recordedAt: wallStart }))
+      .then(({ duration, wallStart }) => {
+        // También se marcan en el clip los demás momentos de la partida que caen dentro de su
+        // tramo (p. ej. la muerte justo después de un doble kill).
+        const seen = new Set(events.map((e) => `${e.type}@${e.at}`));
+        const others = ((this.match && this.match.events) || [])
+          .filter((e) => e.at >= wallStart && e.at <= wallStart + duration * 1000 && !seen.has(`${e.type}@${e.at}`));
+        const all = [...events, ...others].sort((a, b) => (a.at || 0) - (b.at || 0));
+        return this.library.add({ type: 'clip', game, title, events: all, file: out, duration, recordedAt: wallStart });
+      })
       .then((item) => this.emit('saved', item))
       .catch((e) => this.emit('failed', e))
       .finally(() => { if (pinId) this.recorder.unpin(pinId); });

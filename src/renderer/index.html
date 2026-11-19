@@ -71,6 +71,7 @@
         <input id="m-title" class="title-input" maxlength="80">
         <button id="m-close" class="icon" title="Cerrar">✕</button>
       </div>
+      <div id="m-context" class="context"></div>
       <video id="m-video" controls preload="metadata"></video>
       <div class="timeline">
         <div id="m-track" class="tl-track" title="Haz clic para ir a ese punto">
@@ -84,6 +85,11 @@
         <div class="tl-times muted small"><span>0:00</span><span id="m-total">0:00</span></div>
       </div>
       <div id="m-events" class="chips"></div>
+      <div id="m-note-box" class="note-box hidden">
+        <input id="m-note-text" type="text" maxlength="200" placeholder="Escribe la nota y pulsa Enter">
+        <button id="m-note-save" class="ghost small-btn">Guardar nota</button>
+        <button id="m-note-cancel" class="ghost small-btn">Cancelar</button>
+      </div>
       <div class="modal-foot">
         <div class="trim">
           <button id="m-in" class="ghost small-btn" title="Tecla I">Inicio aquí</button>
@@ -94,6 +100,8 @@
           <button id="m-trim" class="primary small-btn" disabled>Crear recorte</button>
         </div>
         <div class="modal-actions">
+          <button id="m-note" class="ghost" title="Tecla N">+ Nota</button>
+          <button id="m-discord" class="ghost" title="Lo comprime al límite de Discord y lo copia para pegarlo con Ctrl+V">Discord</button>
           <button id="m-fav" class="ghost">☆ Favorito</button>
           <button id="m-reveal" class="ghost">Mostrar en carpeta</button>
           <button id="m-delete" class="danger">Eliminar</button>

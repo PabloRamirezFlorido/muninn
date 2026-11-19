@@ -190,3 +190,24 @@ button.chip { cursor: pointer; }
 button.chip:hover { border-color: var(--accent); }
 .modal-foot { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .trim, .modal-actions { display: flex; align-items: center; gap: 8px; }
+
+/* ---- estadísticas, partida y clips relacionados, notas ---- */
+.context { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-height: 0; }
+.context:empty { display: none; }
+.stat { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 3px 9px; font-size: 12.5px; color: var(--muted); }
+.stat b { color: var(--text); font-weight: 600; }
+.stat.win b { color: var(--accent); }
+.stat.loss b { color: #ff9a94; }
+.rel { display: flex; gap: 6px; align-items: center; overflow-x: auto; }
+.rel-clip {
+  flex: none; width: 96px; aspect-ratio: 16 / 9; border-radius: 6px; border: 1px solid var(--line); cursor: pointer;
+  background: #000 center / cover no-repeat; position: relative; padding: 0;
+}
+.rel-clip:hover { border-color: var(--accent); }
+.rel-clip span { position: absolute; left: 3px; right: 3px; bottom: 2px; font-size: 10.5px; color: #fff; text-shadow: 0 1px 2px #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+.chip .x { margin-left: 6px; color: var(--muted); cursor: pointer; }
+.chip .x:hover { color: #ff9a94; }
+.note-box { display: flex; gap: 8px; align-items: center; }
+.note-box input { flex: 1; }
+.card-stats { color: var(--accent); font-size: 12px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.thumb .count { position: absolute; right: 8px; top: 6px; background: rgba(0,0,0,.75); padding: 1px 6px; border-radius: 4px; font-size: 11.5px; }

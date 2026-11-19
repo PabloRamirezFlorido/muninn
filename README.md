@@ -45,7 +45,14 @@ Los nombres antiguos `JUGADAS_*` siguen funcionando.
 
 - **Captura** ([src/recorder.js](src/recorder.js)): con un juego abierto se graba solo su ventana, con `gfxcapture` (Windows Graphics Capture), aunque haya otras ventanas encima. Sin juego, o si su ventana aún no existe, se graba el monitor con `ddagrab`. El vídeo se codifica con NVENC, AMF o QSV, o con x264 si no hay GPU compatible, y se graba en segmentos `.ts` de 2 s dentro de `<biblioteca>/_buffer`. Fuera de partida solo se conservan los últimos N segundos; durante una partida se conservan todos, para poder guardarla entera.
 - **Sincronía** ([src/recorder.js](src/recorder.js)): audio y vídeo usan la hora del sistema en segundos desde que arranca FFmpeg (t0). El vídeo la recibe con `setpts=RTCTIME`. El audio la recibe en `writeAudio`, que lo coloca según su hora de captura y corrige la deriva del reloj de la tarjeta de sonido. Con FFmpeg 7 o superior no se usan `-copyts`/`-itsoffset`: con marcas de tiempo en hora epoch, el planificador detiene el vídeo.
-- **Barra de momentos** ([src/renderer/app.js](src/renderer/app.js)): cada momento (kill, objetivo, clip manual…) guarda su hora real (`at`). El reproductor lo marca en la barra; al pulsar un marcador se selecciona el tramo de 10 s antes a 4 s después, y ese tramo se puede ajustar arrastrando sus extremos o con las teclas I/O.
+- **Barra de momentos** ([src/renderer/app.js](src/renderer/app.js)): cada momento guarda su hora real (`at`) y el reproductor lo marca en la barra.
+  - Momentos que se marcan: kill, muerte, asistencia, objetivo, ronda, clip manual o nota propia.
+  - Los juegos emiten un `event` por cada momento tuyo; solo los activados en Ajustes generan clip (`clip: true`), el resto se marca en la barra de la partida completa ([src/director.js](src/director.js) `mark`).
+  - Al pulsar un marcador se selecciona el tramo de 10 s antes a 4 s después; se ajusta arrastrando sus extremos o con las teclas I/O.
+  - La tecla N añade una nota en el instante actual, guardada como evento `note`.
+- **Estadísticas** ([src/games.js](src/games.js)): durante la partida de LoL se guarda cada 5 s una instantánea de `allgamedata`: KDA, CS, visión, nivel y duración. En Valorant, el marcador.
+- **Partida ↔ clips:** se relacionan por tiempo (clip del mismo juego dentro de la duración de la partida), así que funciona también con vídeos antiguos.
+- **Discord** ([src/library.js](src/library.js) `exportForDiscord`): recodifica a un bitrate calculado para el límite configurado (10 MB por defecto) y repite si se pasa. Lo deja en `<biblioteca>/discord` y en el portapapeles (`Set-Clipboard -LiteralPath`).
 - **Audio** ([src/renderer/audio.js](src/renderer/audio.js)): una ventana oculta captura el audio del sistema (loopback) y el micrófono con WebAudio, y los envía en PCM al stdin de FFmpeg.
 - **Juegos** ([src/games.js](src/games.js)):
   - **League of Legends:** Live Client Data API (`127.0.0.1:2999`). Detecta kills, multikills, ace, primera sangre, robos y objetivos, y victoria.

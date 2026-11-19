@@ -124,9 +124,13 @@ class ProcessWatcher extends EventEmitter {
 
 const norm = (s) => String(s || '').split('#')[0].trim().toLowerCase();
 
+const STATS_EVERY_POLLS = 5; // las estadísticas se refrescan cada ~5 s
+
 /**
  * League of Legends: Live Client Data API (https://127.0.0.1:2999), disponible solo durante
- * la partida. Emite matchStart / highlight / matchEnd.
+ * la partida. Emite matchStart / event / matchEnd. Cada 'event' es un momento tuyo (kill,
+ * muerte, objetivo…): con clip=true según tus ajustes se guarda como clip; si no, solo se
+ * marca en la barra de la partida completa.
  */
 class LolClient extends EventEmitter {
   constructor(getSettings) {
@@ -171,6 +175,8 @@ class LolClient extends EventEmitter {
         // Si la app se abre a mitad de partida, no se recortan eventos que ya no están en el buffer.
         this.lastId = events.length ? Math.max(...events.map((e) => e.EventID)) : -1;
         this.inMatch = true;
+        this.stats = null;
+        this.polls = 0;
         this.emit('matchStart', { champion: this.champion });
         return;
       }
@@ -179,50 +185,73 @@ class LolClient extends EventEmitter {
         this.lastId = ev.EventID;
         this.handle(ev);
       }
+      if (this.inMatch && ++this.polls % STATS_EVERY_POLLS === 1) await this.refreshStats();
     } finally {
       this.busy = false;
     }
+  }
+
+  /** Guarda tus estadísticas actuales: al acabar la partida la API desaparece enseguida. */
+  async refreshStats() {
+    try {
+      const all = await getJson('https://127.0.0.1:2999/liveclientdata/allgamedata');
+      const mine = (all.allPlayers || []).find((p) => norm(p.riotId || p.riotIdGameName || p.summonerName) === this.me);
+      if (!mine) return;
+      const sc = mine.scores || {};
+      this.stats = {
+        champion: mine.championName || this.champion,
+        kills: sc.kills ?? 0,
+        deaths: sc.deaths ?? 0,
+        assists: sc.assists ?? 0,
+        cs: sc.creepScore ?? 0,
+        vision: Math.round(sc.wardScore ?? 0),
+        level: mine.level ?? (all.activePlayer && all.activePlayer.level) ?? null,
+        gameTime: Math.round((all.gameData && all.gameData.gameTime) || 0),
+      };
+    } catch { /* se reintenta en el siguiente ciclo */ }
   }
 
   handle(ev) {
     const cfg = this.getSettings().lol;
     const me = this.me;
     const isMe = (n) => norm(n) === me;
-    const hl = (type, label, priority, extra = {}) => this.emit('highlight', {
-      type, label, priority, wall: Date.now(), pre: cfg.preSeconds, post: cfg.postSeconds, ...extra,
+    const emit = (type, label, priority, clip, extra = {}) => this.emit('event', {
+      type, label, priority, clip: !!clip, wall: Date.now(), pre: cfg.preSeconds, post: cfg.postSeconds, ...extra,
     });
     const objectives = { DragonKill: 'Dragón', BaronKill: 'Barón', HeraldKill: 'Heraldo', HordeKill: 'Larvas', AtakhanKill: 'Atakhan' };
 
     switch (ev.EventName) {
       case 'ChampionKill':
-        if (isMe(ev.KillerName) && cfg.kill) hl('kill', 'Kill', 1);
-        else if (isMe(ev.VictimName) && cfg.deaths) hl('death', 'Muerte', 0);
-        else if ((ev.Assisters || []).some(isMe) && cfg.assists) hl('assist', 'Asistencia', 0);
+        if (isMe(ev.KillerName)) emit('kill', 'Kill', 1, cfg.kill);
+        else if (isMe(ev.VictimName)) emit('death', 'Muerte', 0, cfg.deaths);
+        else if ((ev.Assisters || []).some(isMe)) emit('assist', 'Asistencia', 0, cfg.assists);
         break;
       case 'Multikill':
-        if (isMe(ev.KillerName) && ev.KillStreak >= cfg.multikillMin) {
+        if (isMe(ev.KillerName)) {
           const names = { 2: 'Doble kill', 3: 'Triple kill', 4: 'Cuádruple kill', 5: 'Pentakill' };
-          hl('multikill', names[ev.KillStreak] || `${ev.KillStreak} kills`, 2 + ev.KillStreak);
+          emit('multikill', names[ev.KillStreak] || `${ev.KillStreak} kills`, 2 + ev.KillStreak, ev.KillStreak >= cfg.multikillMin);
         }
         break;
       case 'Ace':
-        if (isMe(ev.Acer) && cfg.ace) hl('ace', 'Ace', 6);
+        if (isMe(ev.Acer)) emit('ace', 'Ace', 6, cfg.ace);
         break;
       case 'FirstBlood':
-        if (isMe(ev.Recipient) && cfg.firstBlood) hl('firstblood', 'Primera sangre', 3);
+        if (isMe(ev.Recipient)) emit('firstblood', 'Primera sangre', 3, cfg.firstBlood);
         break;
       case 'TurretKilled':
       case 'InhibKilled':
-        if (isMe(ev.KillerName) && cfg.turrets) hl('structure', ev.EventName === 'TurretKilled' ? 'Torre' : 'Inhibidor', 1);
+        if (isMe(ev.KillerName)) emit('structure', ev.EventName === 'TurretKilled' ? 'Torre' : 'Inhibidor', 1, cfg.turrets);
         break;
-      case 'GameEnd':
-        if (ev.Result === 'Win' && cfg.victory) hl('victory', 'Victoria', 4, { pre: 10, post: 3 });
-        this.endMatch(ev.Result === 'Win' ? 'win' : ev.Result === 'Lose' ? 'loss' : null);
+      case 'GameEnd': {
+        const result = ev.Result === 'Win' ? 'win' : ev.Result === 'Lose' ? 'loss' : null;
+        if (result) emit(result === 'win' ? 'victory' : 'defeat', result === 'win' ? 'Victoria' : 'Derrota', 4, result === 'win' && cfg.victory, { pre: 10, post: 3 });
+        this.endMatch(result);
         break;
+      }
       default:
         if (objectives[ev.EventName] && isMe(ev.KillerName)) {
-          if (ev.Stolen === 'True' && cfg.steals) hl('steal', `Robo de ${objectives[ev.EventName]}`, 7);
-          else if (cfg.objectives) hl('objective', objectives[ev.EventName], 2);
+          if (ev.Stolen === 'True') emit('steal', `Robo de ${objectives[ev.EventName]}`, 7, cfg.steals);
+          else emit('objective', objectives[ev.EventName], 2, cfg.objectives);
         }
     }
   }
@@ -230,7 +259,7 @@ class LolClient extends EventEmitter {
   endMatch(result) {
     if (!this.inMatch) return;
     this.inMatch = false;
-    this.emit('matchEnd', { result, champion: this.champion });
+    this.emit('matchEnd', { result, champion: this.champion, stats: this.stats });
   }
 }
 
@@ -307,11 +336,11 @@ class ValorantClient extends EventEmitter {
       if (!this.inMatch) return;
 
       const cfg = this.getSettings().valorant;
-      const hl = (type, label, priority) => this.emit('highlight', {
-        type, label, priority, wall: Date.now(), pre: cfg.preSeconds, post: cfg.postSeconds,
+      const emit = (type, label, priority, clip) => this.emit('event', {
+        type, label, priority, clip: !!clip, wall: Date.now(), pre: cfg.preSeconds, post: cfg.postSeconds,
       });
-      if (ally > this.ally && cfg.roundWin) hl('round_win', `Ronda ganada ${ally}-${enemy}`, 3);
-      if (enemy > this.enemy && cfg.roundLoss) hl('round_loss', `Ronda perdida ${ally}-${enemy}`, 1);
+      if (ally > this.ally) emit('round_win', `Ronda ganada ${ally}-${enemy}`, 3, cfg.roundWin);
+      if (enemy > this.enemy) emit('round_loss', `Ronda perdida ${ally}-${enemy}`, 1, cfg.roundLoss);
       this.ally = ally;
       this.enemy = enemy;
     } catch {
@@ -326,7 +355,7 @@ class ValorantClient extends EventEmitter {
     if (!this.inMatch) return;
     this.inMatch = false;
     const result = this.ally > this.enemy ? 'win' : this.ally < this.enemy ? 'loss' : null;
-    this.emit('matchEnd', { result, score: `${this.ally}-${this.enemy}` });
+    this.emit('matchEnd', { result, score: `${this.ally}-${this.enemy}`, stats: { score: `${this.ally}-${this.enemy}` } });
   }
 }
 

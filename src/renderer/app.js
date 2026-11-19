@@ -61,6 +61,7 @@ function el(tag, props = {}, ...children) {
 function renderStatus(st) {
   state.status = st;
   const s = state.settings;
+  if (!s) return; // llega estado antes de cargar los ajustes: se pinta al terminar 'state:get'
   const dot = $('rec-dot');
   dot.className = `rec-dot${st.paused ? ' paused' : st.recording ? ' on' : ''}`;
 
@@ -107,6 +108,37 @@ async function loadLibrary() {
   renderGrid();
 }
 
+// Partida y clips se relacionan por tiempo: un clip pertenece a la partida del mismo juego que
+// estaba grabándose cuando ocurrió. Así funciona también con lo grabado antes de esta versión.
+function matchOf(clip) {
+  if (!clip || clip.type === 'match') return null;
+  return items.find((m) => m.type === 'match' && m.game === clip.game
+    && clip.createdAt >= m.createdAt - 2000 && clip.createdAt <= m.createdAt + m.duration * 1000) || null;
+}
+
+function clipsOf(match) {
+  return items.filter((c) => c.type === 'clip' && matchOf(c)?.id === match.id)
+    .sort((a, b) => a.createdAt - b.createdAt);
+}
+
+function statsParts(it) {
+  const s = it.stats;
+  if (!s) return [];
+  if (s.score) return [['Marcador', s.score]];
+  const parts = [['KDA', `${s.kills}/${s.deaths}/${s.assists}`], ['CS', s.cs]];
+  if (s.vision != null) parts.push(['Visión', s.vision]);
+  if (s.level != null) parts.push(['Nivel', s.level]);
+  if (s.gameTime) parts.push(['Duración', fmtDur(s.gameTime)]);
+  return parts;
+}
+
+function statsLine(it) {
+  const s = it.stats;
+  if (!s) return '';
+  if (s.score) return `Marcador ${s.score}`;
+  return [s.champion, `${s.kills}/${s.deaths}/${s.assists}`, `${s.cs} CS`].filter(Boolean).join(' · ');
+}
+
 function visibleItems() {
   const game = $('filter-game').value;
   const q = $('filter-text').value.trim().toLowerCase();
@@ -124,15 +156,19 @@ function renderGrid() {
   const list = visibleItems();
   const grid = $('grid');
   grid.replaceChildren(...list.map((it) => {
+    const nClips = it.type === 'match' ? clipsOf(it).length : 0;
     const thumb = el('div', { class: 'thumb' },
       it.favorite ? el('span', { class: 'fav' }, '★') : null,
+      nClips ? el('span', { class: 'count' }, `${nClips} clip${nClips > 1 ? 's' : ''}`) : null,
       el('span', { class: 'game' }, GAME_NAMES[it.game] || it.game),
       el('span', { class: 'dur' }, fmtDur(it.duration)));
     if (it.thumbUrl) thumb.style.backgroundImage = `url("${it.thumbUrl}")`;
+    const stats = statsLine(it);
     return el('div', { class: 'card', onclick: () => openItem(it) },
       thumb,
       el('div', { class: 'card-body' },
         el('div', { class: 'card-title', title: it.title }, it.title),
+        stats ? el('div', { class: 'card-stats' }, stats) : null,
         el('div', { class: 'card-meta' }, el('span', {}, fmtDate(it.createdAt)), el('span', {}, fmtBytes(it.size)))));
   }));
   $('empty').classList.toggle('hidden', list.length > 0);
@@ -156,7 +192,8 @@ function setView(v) {
 const EVENT_COLORS = {
   kill: '#ef4444', multikill: '#f59e0b', ace: '#f59e0b', firstblood: '#f97316', steal: '#a855f7',
   objective: '#8b5cf6', structure: '#94a3b8', victory: '#22c55e', round_win: '#22c55e',
-  round_loss: '#64748b', death: '#64748b', assist: '#9cc3d3', manual: '#58a9bf',
+  round_loss: '#64748b', death: '#64748b', defeat: '#64748b', assist: '#9cc3d3', manual: '#58a9bf',
+  note: '#e8d9a8',
 };
 // Al pulsar un momento se preselecciona este tramo a su alrededor.
 const MOMENT_BEFORE = 10;
@@ -190,12 +227,23 @@ function renderTimeline() {
       chips.push(el('span', { class: 'chip' }, ev.label));
       continue;
     }
-    const tip = `${fmtDur(t)} · ${ev.label} — clic para seleccionar este momento`;
+    const isNote = ev.type === 'note';
+    const tip = `${fmtDur(t)} · ${isNote ? `Nota: ${ev.label}` : ev.label} — clic para seleccionar este momento`;
     const m = el('button', { class: 'tl-marker', title: tip, onclick: (e) => { e.stopPropagation(); selectMoment(t); } });
     m.style.left = pct(t);
     m.style.setProperty('--c', color);
     markers.push(m);
-    const chip = el('button', { class: 'chip', title: tip, onclick: () => selectMoment(t) }, el('i'), `${fmtDur(t)} · ${ev.label}`);
+    const remove = isNote ? el('span', {
+      class: 'x', title: 'Borrar nota',
+      onclick: async (e) => {
+        e.stopPropagation();
+        Object.assign(current, await api.invoke('library:note-remove', current.id, ev.at));
+        renderTimeline();
+        loadLibrary();
+      },
+    }, '✕') : null;
+    const chip = el('button', { class: 'chip', title: tip, onclick: () => selectMoment(t) },
+      el('i'), `${fmtDur(t)} · ${isNote ? `“${ev.label}”` : ev.label}`, remove);
     chip.style.setProperty('--c', color);
     chips.push(chip);
   }
@@ -203,17 +251,79 @@ function renderTimeline() {
   $('m-events').replaceChildren(...chips);
 }
 
-function openItem(it) {
+// Estadísticas y relación partida ↔ clips encima del vídeo.
+function renderContext() {
+  const it = current;
+  const parts = [];
+  for (const [k, v] of statsParts(it)) parts.push(el('span', { class: 'stat' }, `${k} `, el('b', {}, String(v))));
+  if (it.type === 'match') {
+    const clips = clipsOf(it);
+    if (clips.length) {
+      parts.push(el('span', { class: 'muted small' }, 'Clips de esta partida:'));
+      parts.push(el('div', { class: 'rel' }, clips.map((c) => {
+        const b = el('button', { class: 'rel-clip', title: c.title, onclick: () => openItem(c) }, el('span', {}, c.title));
+        if (c.thumbUrl) b.style.backgroundImage = `url("${c.thumbUrl}")`;
+        return b;
+      })));
+    }
+  } else {
+    const m = matchOf(it);
+    if (m) {
+      parts.push(el('button', {
+        class: 'ghost small-btn', title: m.title,
+        onclick: () => {
+          const t = (it.createdAt - m.createdAt) / 1000;
+          openItem(m, { select: [Math.max(0, t), t + it.duration] });
+        },
+      }, 'Ver en la partida completa'));
+    }
+  }
+  $('m-context').replaceChildren(...parts);
+}
+
+function openItem(it, { select } = {}) {
   current = it;
-  trimIn = null;
-  trimOut = null;
-  updateTrim();
+  trimIn = select ? select[0] : null;
+  trimOut = select ? select[1] : null;
+  closeNoteBox();
   $('m-title').value = it.title;
   video().src = it.fileUrl;
+  if (select) video().addEventListener('loadedmetadata', () => { video().currentTime = select[0]; }, { once: true });
   $('m-fav').textContent = it.favorite ? '★ Favorito' : '☆ Favorito';
+  $('m-discord').textContent = 'Discord';
+  updateTrim();
+  renderContext();
   renderTimeline();
   $('modal').classList.remove('hidden');
   video().play().catch(() => {});
+}
+
+// ---------- notas ----------
+
+let noteAt = null;
+
+function openNoteBox() {
+  if (!current) return;
+  noteAt = current.createdAt + video().currentTime * 1000;
+  video().pause();
+  $('m-note-text').placeholder = `Nota en ${fmtDur(video().currentTime)} (Enter para guardar)`;
+  $('m-note-box').classList.remove('hidden');
+  $('m-note-text').value = '';
+  $('m-note-text').focus();
+}
+
+function closeNoteBox() {
+  noteAt = null;
+  $('m-note-box').classList.add('hidden');
+}
+
+async function saveNote() {
+  const text = $('m-note-text').value.trim();
+  if (!text || noteAt == null) { closeNoteBox(); return; }
+  Object.assign(current, await api.invoke('library:note-add', current.id, noteAt, text));
+  closeNoteBox();
+  renderTimeline();
+  loadLibrary();
 }
 
 function closeModal() {
@@ -292,11 +402,12 @@ const SCHEMA = [
       { key: 'storageQuotaGB', label: 'Espacio máximo', hint: 'Al superarlo se borran primero las partidas más antiguas y luego los clips. Los favoritos nunca se borran.', type: 'number', min: 1, max: 10000, unit: 'GB' },
       { key: 'saveFullMatches', label: 'Guardar partidas completas', type: 'switch' },
       { key: 'maxClipSeconds', label: 'Duración máxima de un clip', hint: 'Los momentos seguidos se unen hasta este límite', type: 'number', min: 20, max: 300, unit: 's' },
+      { key: 'discordLimitMB', label: 'Tamaño para Discord', hint: '10 MB sin Nitro, 50 con Nitro Basic, 500 con Nitro. Las exportaciones van a la carpeta "discord".', type: 'number', min: 5, max: 500, unit: 'MB' },
     ],
   },
   {
     title: 'League of Legends',
-    note: 'Usa la Live Client Data API oficial de Riot. Los eventos que detecta son tuyos (no los de otros jugadores).',
+    note: 'Usa la Live Client Data API oficial de Riot y solo detecta tus eventos (no los de otros jugadores). Los interruptores deciden qué genera un clip. Todos los momentos se marcan igualmente en la barra de la partida completa.',
     fields: [
       { key: 'lol.enabled', label: 'Detectar momentos automáticamente', type: 'switch' },
       { key: 'lol.kill', label: 'Kills', type: 'switch' },
@@ -493,10 +604,33 @@ $('m-close').addEventListener('click', closeModal);
 $('modal').addEventListener('click', (e) => { if (e.target === $('modal')) closeModal(); });
 document.addEventListener('keydown', (e) => {
   if (!current) return;
-  if (e.key === 'Escape') closeModal();
+  if (e.key === 'Escape') {
+    if (noteAt != null) closeNoteBox(); else closeModal();
+    return;
+  }
   if (e.target.tagName === 'INPUT') return;
   if (e.key === 'i' || e.key === 'I') $('m-in').click();
   if (e.key === 'o' || e.key === 'O') $('m-out').click();
+  if (e.key === 'n' || e.key === 'N') { e.preventDefault(); openNoteBox(); }
+});
+$('m-note').addEventListener('click', openNoteBox);
+$('m-note-save').addEventListener('click', saveNote);
+$('m-note-cancel').addEventListener('click', closeNoteBox);
+$('m-note-text').addEventListener('keydown', (e) => { if (e.key === 'Enter') saveNote(); });
+$('m-discord').addEventListener('click', async () => {
+  const btn = $('m-discord');
+  const it = current;
+  btn.disabled = true;
+  btn.textContent = 'Comprimiendo…';
+  try {
+    const { size } = await api.invoke('library:discord', it.id);
+    if (current === it) btn.textContent = `Copiado (${(size / 1048576).toFixed(1)} MB) · Ctrl+V en Discord`;
+  } catch (e) {
+    if (current === it) btn.textContent = 'Discord';
+    alert(String(e.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''));
+  } finally {
+    btn.disabled = false;
+  }
 });
 $('m-title').addEventListener('change', saveTitle);
 $('m-title').addEventListener('keydown', (e) => { if (e.key === 'Enter') e.target.blur(); });
