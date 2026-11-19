@@ -87,12 +87,20 @@
     <div class="modal-card">
       <div class="modal-head">
         <input id="m-title" class="title-input" maxlength="80">
+        <div id="m-stats" class="head-stats"></div>
+        <button id="m-fav" class="icon-btn" title="Marcar como favorito">☆</button>
+        <button id="m-reveal" class="icon-btn" title="Mostrar en la carpeta">
+          <svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>
+        </button>
+        <button id="m-delete" class="icon-btn del" title="Eliminar">
+          <svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/></svg>
+        </button>
         <button id="m-close" class="icon" title="Cerrar">✕</button>
       </div>
       <div id="m-context" class="context"></div>
       <video id="m-video" controls preload="metadata"></video>
       <div class="timeline">
-        <div id="m-track" class="tl-track" title="Haz clic para ir a ese punto">
+        <div id="m-track" class="tl-track">
           <div id="m-sel" class="tl-sel hidden">
             <div class="tl-handle" data-edge="in" title="Arrastra para mover el inicio"></div>
             <div class="tl-handle" data-edge="out" title="Arrastra para mover el final"></div>
@@ -100,10 +108,14 @@
           <div id="m-markers"></div>
           <div id="m-head" class="tl-head"></div>
         </div>
-        <div class="tl-times muted small"><span>0:00</span><span id="m-total">0:00</span></div>
+        <div class="tl-times muted small">
+          <span>0:00</span>
+          <div id="m-filters" class="ev-filters" role="group" aria-label="Filtrar momentos"></div>
+          <button id="m-list-toggle" class="list-toggle hidden" type="button" title="Ver todos los momentos en una lista">Lista</button>
+          <span id="m-total">0:00</span>
+        </div>
       </div>
-      <div id="m-filters" class="ev-filters" role="group" aria-label="Filtrar momentos"></div>
-      <div id="m-events" class="chips"></div>
+      <div id="m-events" class="chips hidden"></div>
       <div id="m-note-box" class="note-box hidden">
         <input id="m-note-text" type="text" maxlength="200" placeholder="Escribe la nota y pulsa Enter">
         <button id="m-note-save" class="ghost small-btn">Guardar nota</button>
@@ -117,13 +129,7 @@
           <button id="m-preview" class="ghost small-btn" disabled>▶ Ver selección</button>
           <button id="m-clear" class="ghost small-btn" disabled>Quitar</button>
         </div>
-        <div class="modal-actions">
-          <button id="m-fav" class="ghost">☆ Favorito</button>
-          <button id="m-reveal" class="ghost">Mostrar en carpeta</button>
-          <button id="m-delete" class="danger">Eliminar</button>
-        </div>
         <div class="tools" role="toolbar" aria-label="Herramientas de edición">
-          <span class="tools-title">Herramientas</span>
           <button id="m-trim" class="tool t-trim" disabled title="Guarda el tramo seleccionado como un clip nuevo">
             <svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.12 15.88M14.47 14.48 20 20M8.12 8.12 12 12"/></svg>
             <span class="lbl">Recortar</span>

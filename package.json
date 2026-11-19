@@ -1,7 +1,7 @@
 {
   "name": "muninn",
   "productName": "Muninn",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "description": "Grabación de partidas y clips automáticos de los mejores momentos",
   "main": "src/main.js",
   "author": "Pablo",

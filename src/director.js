@@ -1,20 +1,27 @@
 const { EventEmitter } = require('events');
 
 const GAP_MS = 3000; // eventos separados por menos de esto acaban en el mismo clip
+// Tras cada momento se espera esto antes de cerrar el clip, por si llega otro: LoL da un doble
+// kill si la siguiente kill llega en ~10 s. Sin esta espera, la segunda kill abría un clip nuevo
+// que volvía a incluir la primera (metraje duplicado).
+const CHAIN_MS = 12000;
 
 /**
  * Decide qué se guarda: une eventos cercanos en un único clip (p. ej. kill + kill + doble kill),
  * guarda la partida completa al terminar y atiende los clips manuales.
  */
 class Director extends EventEmitter {
-  constructor({ recorder, library, getSettings }) {
+  constructor({ recorder, library, getSettings, chainMs = CHAIN_MS, gapMs = GAP_MS }) {
     super();
     this.recorder = recorder;
     this.library = library;
     this.getSettings = getSettings;
+    this.chainMs = chainMs;
+    this.gapMs = gapMs;
     this.pending = null;
     this.match = null;
     this.saving = new Set();
+    this.lastClipEnd = {}; // por juego: hora real en que terminó el último clip automático
   }
 
   get busy() { return !!this.pending || this.saving.size > 0; }
@@ -75,22 +82,28 @@ class Director extends EventEmitter {
     this.mark(game, ev);
 
     const p = this.pending;
-    if (p && p.game === game && start <= p.end + GAP_MS && Math.max(end, p.end) - p.start <= s.maxClipSeconds * 1000) {
+    if (p && p.game === game && start <= p.end + this.gapMs && Math.max(end, p.end) - p.start <= s.maxClipSeconds * 1000) {
       p.end = Math.max(p.end, end);
+      p.lastWall = Math.max(p.lastWall, ev.wall);
       p.events.push(ev);
       this.schedule(p);
       return;
     }
     if (p) this.flush();
+    // Nunca empieza antes de donde acabó el clip anterior: así dos clips seguidos no repiten
+    // metraje aunque sus momentos estén cerca.
+    const clipStart = Math.min(ev.wall, Math.max(start, this.lastClipEnd[game] || 0));
     const id = `hl-${Date.now()}`;
-    this.pending = { id, game, start, end, events: [ev] };
-    this.recorder.pin(id, start);
+    this.pending = { id, game, start: clipStart, end, lastWall: ev.wall, events: [ev] };
+    this.recorder.pin(id, clipStart);
     this.schedule(this.pending);
   }
 
   schedule(p) {
     clearTimeout(p.timer);
-    p.timer = setTimeout(() => this.flush(), Math.max(0, p.end - Date.now()));
+    // Se cierra al final del clip o al acabar la espera de encadenado, lo que llegue después.
+    const at = Math.max(p.end, p.lastWall + this.chainMs);
+    p.timer = setTimeout(() => this.flush(), Math.max(0, at - Date.now()));
   }
 
   flush() {
@@ -98,6 +111,7 @@ class Director extends EventEmitter {
     if (!p) return;
     this.pending = null;
     clearTimeout(p.timer);
+    this.lastClipEnd[p.game] = Math.max(this.lastClipEnd[p.game] || 0, p.end);
     const best = [...p.events].sort((a, b) => b.priority - a.priority)[0];
     const kills = p.events.filter((e) => e.type === 'kill').length;
     let title = best.label;

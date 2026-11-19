@@ -300,7 +300,7 @@ function renderFilters() {
   const present = EVENT_CATEGORIES.filter((c) => counts[c.id]);
   // Con una sola categoría (o ninguna) los filtros no aportan nada.
   if (present.length < 2) { $('m-filters').replaceChildren(); return; }
-  $('m-filters').replaceChildren(el('span', { class: 'lbl-f' }, 'Mostrar'), ...present.map((c) => {
+  $('m-filters').replaceChildren(...present.map((c) => {
     const b = el('button', {
       type: 'button', class: `ev-filter${hiddenCategories.has(c.id) ? ' off' : ''}`,
       title: hiddenCategories.has(c.id) ? `Mostrar ${c.label.toLowerCase()}` : `Ocultar ${c.label.toLowerCase()}`,
@@ -330,9 +330,14 @@ function renderTimeline() {
     }
     const isNote = ev.type === 'note';
     const tip = `${fmtDur(t)} · ${isNote ? `Nota: ${ev.label}` : ev.label} — clic para seleccionar este momento`;
-    const m = el('button', { class: 'tl-marker', title: tip, onclick: (e) => { e.stopPropagation(); selectMoment(t); } });
+    // Etiqueta propia (aparece al instante al pasar el ratón; el title nativo tarda ~1 s).
+    const m = el('button', { class: 'tl-marker', 'aria-label': tip, onclick: (e) => { e.stopPropagation(); selectMoment(t); } });
+    m.dataset.tip = `${fmtDur(t)} · ${isNote ? `Nota: ${ev.label}` : ev.label}`;
     m.style.left = pct(t);
     m.style.setProperty('--c', color);
+    // Cerca de los bordes, la etiqueta se alinea hacia dentro para no salirse.
+    const p = (t / (duration() || 1)) * 100;
+    if (p < 8) m.classList.add('tip-left'); else if (p > 92) m.classList.add('tip-right');
     markers.push(m);
     const remove = isNote ? el('span', {
       class: 'x', title: 'Borrar nota',
@@ -350,17 +355,24 @@ function renderTimeline() {
   }
   $('m-markers').replaceChildren(...markers);
   $('m-events').replaceChildren(...chips);
+  // La lista completa es opcional: por defecto los momentos se ven solo en la barra.
+  const toggle = $('m-list-toggle');
+  toggle.classList.toggle('hidden', chips.length === 0);
+  toggle.textContent = showEventList ? 'Ocultar lista' : `Lista (${chips.length})`;
+  $('m-events').classList.toggle('hidden', !showEventList || chips.length === 0);
 }
 
-// Estadísticas y relación partida ↔ clips encima del vídeo.
+let showEventList = false;
+
+// Estadísticas (en la cabecera) y relación partida ↔ clips (fila fina encima del vídeo).
 function renderContext() {
   const it = current;
+  $('m-stats').replaceChildren(...statsParts(it).map(([k, v]) => el('span', { class: 'stat' }, `${k} `, el('b', {}, String(v)))));
   const parts = [];
-  for (const [k, v] of statsParts(it)) parts.push(el('span', { class: 'stat' }, `${k} `, el('b', {}, String(v))));
   if (it.type === 'match') {
     const clips = clipsOf(it);
     if (clips.length) {
-      parts.push(el('span', { class: 'muted small' }, 'Clips de esta partida:'));
+      parts.push(el('span', { class: 'muted small' }, `Clips (${clips.length})`));
       parts.push(el('div', { class: 'rel' }, clips.map((c) => {
         const b = el('button', { class: 'rel-clip', title: c.title, onclick: () => openItem(c) }, el('span', {}, c.title));
         if (c.thumbUrl) b.style.backgroundImage = `url("${c.thumbUrl}")`;
@@ -382,6 +394,13 @@ function renderContext() {
   $('m-context').replaceChildren(...parts);
 }
 
+function setFavIcon(on) {
+  const b = $('m-fav');
+  b.textContent = on ? '★' : '☆';
+  b.classList.toggle('on', !!on);
+  b.title = on ? 'Quitar de favoritos' : 'Marcar como favorito';
+}
+
 function openItem(it, { select } = {}) {
   current = it;
   trimIn = select ? select[0] : null;
@@ -390,7 +409,7 @@ function openItem(it, { select } = {}) {
   $('m-title').value = it.title;
   video().src = it.fileUrl;
   if (select) video().addEventListener('loadedmetadata', () => { video().currentTime = select[0]; }, { once: true });
-  $('m-fav').textContent = it.favorite ? '★ Favorito' : '☆ Favorito';
+  setFavIcon(it.favorite);
   setLabel($('m-discord'), 'Discord');
   setLabel($('m-gif'), 'GIF');
   updateTrim();
@@ -893,6 +912,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'o' || e.key === 'O') $('m-out').click();
   if (e.key === 'n' || e.key === 'N') { e.preventDefault(); openNoteBox(); }
 });
+$('m-list-toggle').addEventListener('click', () => { showEventList = !showEventList; renderTimeline(); });
 $('m-note').addEventListener('click', openNoteBox);
 $('m-note-save').addEventListener('click', saveNote);
 $('m-note-cancel').addEventListener('click', closeNoteBox);
@@ -951,7 +971,7 @@ $('m-title').addEventListener('keydown', (e) => { if (e.key === 'Enter') e.targe
 $('m-fav').addEventListener('click', async () => {
   const updated = await api.invoke('library:update', current.id, { favorite: !current.favorite });
   Object.assign(current, updated);
-  $('m-fav').textContent = current.favorite ? '★ Favorito' : '☆ Favorito';
+  setFavIcon(current.favorite);
   loadLibrary();
 });
 $('m-reveal').addEventListener('click', () => api.invoke('library:reveal', current.id));
