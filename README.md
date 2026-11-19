@@ -10,6 +10,10 @@ En esa página, descarga `Muninn-Setup-x.y.z.exe` y ejecútalo. Si ya tenías Mu
 
 Requisitos: Windows 10 u 11. Recomendable una GPU NVIDIA, AMD o Intel con codificador por hardware.
 
+> El instalador no está firmado digitalmente, así que la primera vez Windows puede mostrar "Windows protegió su PC". Pulsa **Más información → Ejecutar de todas formas**.
+
+Muninn incluye FFmpeg (licencia GPL v3) y Electron. Sus licencias y dónde encontrar su código fuente están en [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Muninn no está respaldado por Riot Games.
+
 Hasta la versión 1.2 se llamaba **Jugadas**:
 - El `appId` (`com.pablo.jugadas`) se mantiene a propósito, para que el instalador de Muninn actualice la instalación anterior en vez de crear otra aparte.
 - La primera vez que arranca, Muninn copia `settings.json` y `encoders.json` de `%APPDATA%\Jugadas` a `%APPDATA%\Muninn`.

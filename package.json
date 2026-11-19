@@ -28,6 +28,9 @@
       "assets/**/*",
       "package.json"
     ],
+    "extraFiles": [
+      "THIRD_PARTY_NOTICES.md"
+    ],
     "extraResources": [
       {
         "from": "vendor/ffmpeg",
