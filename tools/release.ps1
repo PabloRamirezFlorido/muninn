@@ -1,9 +1,10 @@
 ﻿# Publica la versión actual (package.json) como Release de GitHub con el instalador adjunto.
 #  1. Exige que no haya cambios sin commit y sube los commits pendientes.
 #  2. Compila el instalador (npm run dist), salvo -SkipBuild.
-#  3. Crea la release vX.Y.Z con las notas del último commit y adjunta Muninn-Setup-X.Y.Z.exe.
-# Uso: npm run release   (o: powershell -ExecutionPolicy Bypass -File tools/release.ps1 [-SkipBuild] [-Installer ruta.exe])
-param([switch]$SkipBuild, [string]$Installer)
+#  3. Crea la release vX.Y.Z y adjunta Muninn-Setup-X.Y.Z.exe. Las notas son el mensaje del
+#     último commit (sin las líneas "Co-Authored-By"), o el archivo de -NotesFile.
+# Uso: npm run release   (o: powershell -ExecutionPolicy Bypass -File tools/release.ps1 [-SkipBuild] [-Installer ruta.exe] [-NotesFile notas.md])
+param([switch]$SkipBuild, [string]$Installer, [string]$NotesFile)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 Set-Location $root
@@ -28,10 +29,17 @@ if (-not $SkipBuild) {
 if (-not $Installer) { $Installer = Join-Path $root "dist\Muninn-Setup-$version.exe" }
 if (-not (Test-Path $Installer)) { throw "No se encuentra el instalador: $Installer" }
 
-# Las notas son el mensaje del último commit (título + lista de cambios).
+if ($NotesFile) {
+  $body = [IO.File]::ReadAllText((Resolve-Path $NotesFile), [Text.Encoding]::UTF8).Trim()
+} else {
+  # Mensaje del último commit sin el título ni los pies "Co-Authored-By".
+  $msg = git log -1 --format=%B | Select-Object -Skip 1 | Where-Object { $_ -notmatch '^Co-Authored-By:' }
+  $body = ($msg -join "`n").Trim()
+}
+$footer = "Descarga **Muninn-Setup-$version.exe**, ejecútalo y listo. Si ya tenías Muninn, se actualiza conservando tu configuración y tus vídeos.`n`n" +
+  "> La primera vez Windows puede mostrar ""Windows protegió su PC"" (el instalador no está firmado): pulsa **Más información → Ejecutar de todas formas**."
 $notes = Join-Path ([IO.Path]::GetTempPath()) "muninn-notes-$version.md"
-$msg = git log -1 --format=%B
-[IO.File]::WriteAllText($notes, (($msg | Select-Object -Skip 1) -join "`n").Trim() + "`n`nDescarga **Muninn-Setup-$version.exe**, ejecútalo y listo. Si ya tenías Muninn, se actualiza conservando tu configuración y tus vídeos.`n", (New-Object Text.UTF8Encoding $false))
+[IO.File]::WriteAllText($notes, "$body`n`n$footer`n", (New-Object Text.UTF8Encoding $false))
 
 Write-Host "Publicando $tag..."
 gh release create $tag "$Installer#Muninn-Setup-$version.exe" --title "Muninn $version" --notes-file $notes --target main
