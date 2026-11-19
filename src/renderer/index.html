@@ -48,9 +48,17 @@
             <option value="lol">League of Legends</option>
             <option value="valorant">Valorant</option>
             <option value="desktop">Escritorio</option>
+            <option value="mix">Varios juegos</option>
           </select>
           <input id="filter-text" type="search" placeholder="Buscar…">
+          <button id="btn-select" class="ghost" title="Elige varios vídeos para unirlos en uno">Crear montaje</button>
         </div>
+      </div>
+      <div id="selbar" class="selbar hidden">
+        <span id="sel-text">Haz clic en los vídeos en el orden en que quieres que salgan</span>
+        <label class="sel-fade"><input id="sel-fade" type="checkbox" checked> Fundido entre clips</label>
+        <button id="sel-cancel" class="ghost small-btn">Cancelar</button>
+        <button id="sel-create" class="primary small-btn" disabled>Crear montaje</button>
       </div>
       <div id="grid" class="grid"></div>
       <div id="empty" class="empty hidden">
@@ -98,6 +106,13 @@
           <button id="m-preview" class="ghost small-btn" disabled>▶ Ver selección</button>
           <button id="m-clear" class="ghost small-btn" disabled>Quitar</button>
           <button id="m-trim" class="primary small-btn" disabled>Crear recorte</button>
+          <span class="sep"></span>
+          <select id="m-speed" class="small-select" title="Velocidad de la cámara lenta">
+            <option value="2">0,5×</option>
+            <option value="4">0,25×</option>
+          </select>
+          <button id="m-slow" class="ghost small-btn" disabled title="Pone el tramo seleccionado a cámara lenta en un vídeo nuevo">Cámara lenta</button>
+          <button id="m-gif" class="ghost small-btn" disabled title="GIF del tramo seleccionado (máx. 15 s), copiado para pegar">GIF</button>
         </div>
         <div class="modal-actions">
           <button id="m-note" class="ghost" title="Tecla N">+ Nota</button>

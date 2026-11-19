@@ -1,9 +1,23 @@
 const fs = require('fs');
 const path = require('path');
 const { EventEmitter } = require('events');
-const { run } = require('./ffmpeg');
+const { run, probe, editVideoArgs } = require('./ffmpeg');
 
-const GAME_NAMES = { lol: 'League of Legends', valorant: 'Valorant', desktop: 'Escritorio' };
+const GAME_NAMES = { lol: 'League of Legends', valorant: 'Valorant', desktop: 'Escritorio', mix: 'Varios juegos' };
+
+const GIF_MAX_SECONDS = 15;
+
+// Momentos de `it` trasladados a otra línea de tiempo: map(t) recibe los segundos dentro del
+// vídeo original y devuelve los del nuevo (o null para descartarlo); base = createdAt nuevo.
+function remapEvents(it, base, map) {
+  const out = [];
+  for (const e of it.events || []) {
+    if (!e.at) continue;
+    const t = map((e.at - it.createdAt) / 1000);
+    if (t != null) out.push({ ...e, at: Math.round(base + t * 1000) });
+  }
+  return out;
+}
 
 function stamp(d = new Date()) {
   const p = (n) => String(n).padStart(2, '0');
@@ -53,7 +67,7 @@ class Library extends EventEmitter {
     return path.join(dir, `${stamp()}_${safeName(GAME_NAMES[game] || game)}_${safeName(title)}.mp4`);
   }
 
-  async add({ type, game, title, events = [], file, duration, recordedAt, stats = null }) {
+  async add({ type, game, title, events = [], file, duration, recordedAt, stats = null, extra = {} }) {
     const id = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
     const thumb = path.join(this.root, 'thumbs', `${id}.jpg`);
     try {
@@ -67,6 +81,7 @@ class Library extends EventEmitter {
       createdAt: recordedAt || Date.now(),
       favorite: false,
       ...(stats ? { stats } : {}),
+      ...extra,
     };
     this.items.push(item);
     this.save();
@@ -132,6 +147,129 @@ class Library extends EventEmitter {
       videoKbps = Math.floor(videoKbps * (limit / size) * 0.9); // se pasó: se ajusta y se repite
     }
     throw new Error('No se pudo dejar por debajo del límite');
+  }
+
+  /**
+   * Une varios vídeos (en el orden dado) en un montaje. Se igualan resolución y fps, los clips
+   * sin audio llevan silencio, y con fade > 0 hay un fundido de esa duración entre cada par.
+   */
+  async montage(ids, encoder, { fade = 0.5 } = {}) {
+    const list = ids.map((id) => this.get(id)).filter(Boolean);
+    if (list.length < 2) throw new Error('Elige al menos dos vídeos');
+    const info = await Promise.all(list.map((it) => probe(it.file)));
+    const H = Math.min(1440, Math.max(...info.map((i) => i.height))) & ~1;
+    const W = Math.round((H * 16) / 9) & ~1;
+    const F = list.length > 1 ? Math.min(fade, ...info.map((i) => i.duration / 3)) : 0;
+
+    const inputs = list.flatMap((it) => ['-i', it.file]);
+    const parts = [];
+    info.forEach((inf, i) => {
+      parts.push(`[${i}:v]setpts=PTS-STARTPTS,fps=60,scale=${W}:${H}:force_original_aspect_ratio=decrease,`
+        + `pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,format=yuv420p,settb=AVTB[v${i}]`);
+      parts.push(inf.hasAudio
+        ? `[${i}:a]asetpts=PTS-STARTPTS,aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,atrim=0:${inf.duration.toFixed(3)}[a${i}]`
+        : `anullsrc=r=48000:cl=stereo,atrim=0:${inf.duration.toFixed(3)}[a${i}]`);
+    });
+    let vOut;
+    let aOut;
+    if (F > 0.05) {
+      // Fundidos encadenados: cada xfade empieza F segundos antes del final de lo acumulado.
+      let vPrev = 'v0';
+      let aPrev = 'a0';
+      let offset = 0;
+      for (let i = 1; i < list.length; i++) {
+        offset += info[i - 1].duration - F;
+        parts.push(`[${vPrev}][v${i}]xfade=transition=fade:duration=${F.toFixed(3)}:offset=${offset.toFixed(3)}[vx${i}]`);
+        parts.push(`[${aPrev}][a${i}]acrossfade=d=${F.toFixed(3)}[ax${i}]`);
+        vPrev = `vx${i}`;
+        aPrev = `ax${i}`;
+      }
+      vOut = vPrev;
+      aOut = aPrev;
+    } else {
+      parts.push(`${list.map((_, i) => `[v${i}][a${i}]`).join('')}concat=n=${list.length}:v=1:a=1[vc][ac]`);
+      vOut = 'vc';
+      aOut = 'ac';
+    }
+
+    const games = [...new Set(list.map((it) => it.game))];
+    const game = games.length === 1 ? games[0] : 'mix';
+    const title = `Montaje · ${list.length} clips`;
+    const out = this.newPath('clip', game, title);
+    await run(['-y', ...inputs, '-filter_complex', parts.join(';'), '-map', `[${vOut}]`, '-map', `[${aOut}]`,
+      ...editVideoArgs(encoder), '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', out]);
+
+    // Los momentos de cada clip pasan a la línea de tiempo del montaje.
+    const base = Date.now();
+    const events = [];
+    let start = 0;
+    list.forEach((it, i) => {
+      const d = info[i].duration;
+      events.push(...remapEvents(it, base, (t) => (t >= 0 && t <= d ? start + t : null)));
+      start += d - (F > 0.05 ? F : 0);
+    });
+    const total = (await probe(out)).duration;
+    return this.add({
+      type: 'clip', game, title, events, file: out, duration: total, recordedAt: base,
+      extra: { montage: true, sources: list.map((it) => it.id) },
+    });
+  }
+
+  /** Copia del vídeo con el tramo [start, end] a cámara lenta (factor 2 = 0,5×, 4 = 0,25×). */
+  async slowMotion(id, start, end, factor, encoder) {
+    const it = this.get(id);
+    if (!it) throw new Error('Vídeo no encontrado');
+    const inf = await probe(it.file);
+    const s = Math.max(0, start);
+    const e = Math.min(inf.duration, end);
+    if (e - s < 0.3) throw new Error('Selecciona un tramo para la cámara lenta');
+    const f = factor === 4 ? 4 : 2;
+    const atempo = f === 4 ? 'atempo=0.5,atempo=0.5' : 'atempo=0.5';
+
+    // Hasta tres tramos (antes, lento, después) que se vuelven a unir.
+    const segs = [];
+    if (s > 0.05) segs.push({ from: 0, to: s, slow: false });
+    segs.push({ from: s, to: e, slow: true });
+    if (inf.duration - e > 0.05) segs.push({ from: e, to: inf.duration, slow: false });
+    const parts = [];
+    segs.forEach((g, i) => {
+      const tr = `${g.from.toFixed(3)}:${g.to.toFixed(3)}`;
+      parts.push(`[0:v]trim=${tr},setpts=${g.slow ? `${f}*` : ''}(PTS-STARTPTS)[v${i}]`);
+      if (inf.hasAudio) parts.push(`[0:a]atrim=${tr},asetpts=PTS-STARTPTS${g.slow ? `,${atempo}` : ''}[a${i}]`);
+    });
+    const pads = segs.map((_, i) => (inf.hasAudio ? `[v${i}][a${i}]` : `[v${i}]`)).join('');
+    parts.push(`${pads}concat=n=${segs.length}:v=1:a=${inf.hasAudio ? 1 : 0}[vc]${inf.hasAudio ? '[ac]' : ''}`);
+    parts.push('[vc]fps=60,format=yuv420p[vo]');
+
+    const title = `${it.title} (cámara lenta)`;
+    const out = this.newPath('clip', it.game, title);
+    await run(['-y', '-i', it.file, '-filter_complex', parts.join(';'), '-map', '[vo]',
+      ...(inf.hasAudio ? ['-map', '[ac]', '-c:a', 'aac', '-b:a', '160k'] : []),
+      ...editVideoArgs(encoder), '-movflags', '+faststart', out]);
+
+    const slowLen = (e - s) * (f - 1);
+    const events = remapEvents(it, it.createdAt, (t) => (t < s ? t : t <= e ? s + (t - s) * f : t + slowLen));
+    return this.add({
+      type: 'clip', game: it.game, title, events, file: out, duration: inf.duration + slowLen, recordedAt: it.createdAt,
+      extra: it.montage ? { montage: true } : {},
+    });
+  }
+
+  /** GIF de un tramo (máx. 15 s) para pegar en chats; va a la carpeta "gifs". */
+  async exportGif(id, start, end, width = 480) {
+    const it = this.get(id);
+    if (!it) throw new Error('Vídeo no encontrado');
+    const s = Math.max(0, start);
+    const e = Math.min(it.duration, end);
+    if (e - s < 0.3) throw new Error('Selecciona un tramo para el GIF');
+    if (e - s > GIF_MAX_SECONDS + 0.01) throw new Error(`Un GIF puede durar como mucho ${GIF_MAX_SECONDS} s: acorta la selección`);
+    const dir = path.join(this.root, 'gifs');
+    fs.mkdirSync(dir, { recursive: true });
+    const out = path.join(dir, `${path.basename(it.file, '.mp4')}_${Math.round(s)}s.gif`);
+    // Paleta propia del tramo para que los colores no queden apagados.
+    const vf = `fps=15,scale=${width}:-2:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4`;
+    await run(['-y', '-ss', s.toFixed(3), '-t', (e - s).toFixed(3), '-i', it.file, '-vf', vf, '-loop', '0', out]);
+    return { file: out, size: fs.statSync(out).size };
   }
 
   remove(id) {

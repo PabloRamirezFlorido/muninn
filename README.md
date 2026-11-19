@@ -53,6 +53,10 @@ Los nombres antiguos `JUGADAS_*` siguen funcionando.
 - **Estadísticas** ([src/games.js](src/games.js)): durante la partida de LoL se guarda cada 5 s una instantánea de `allgamedata`: KDA, CS, visión, nivel y duración. En Valorant, el marcador.
 - **Partida ↔ clips:** se relacionan por tiempo (clip del mismo juego dentro de la duración de la partida), así que funciona también con vídeos antiguos.
 - **Discord** ([src/library.js](src/library.js) `exportForDiscord`): recodifica a un bitrate calculado para el límite configurado (10 MB por defecto) y repite si se pasa. Lo deja en `<biblioteca>/discord` y en el portapapeles (`Set-Clipboard -LiteralPath`).
+- **Editor** ([src/library.js](src/library.js)):
+  - `montage`: une vídeos con `concat`, o con `xfade` + `acrossfade` si hay fundido. Escala y rellena a 16:9 a la mayor altura (máx. 1440p) y a 60 fps, y usa `anullsrc` para los clips sin audio. Los momentos de cada clip se trasladan a la línea de tiempo del montaje, y el montaje lleva `montage: true` para no enlazarse con ninguna partida.
+  - `slowMotion`: divide el vídeo en hasta tres tramos con `trim`, ralentiza el central con `setpts` y `atempo` y los vuelve a unir.
+  - `exportGif`: genera un GIF con `palettegen`/`paletteuse` a 15 fps y 480 px de ancho, de 15 s como mucho, en `<biblioteca>/gifs`.
 - **Audio** ([src/renderer/audio.js](src/renderer/audio.js)): una ventana oculta captura el audio del sistema (loopback) y el micrófono con WebAudio, y los envía en PCM al stdin de FFmpeg.
 - **Juegos** ([src/games.js](src/games.js)):
   - **League of Legends:** Live Client Data API (`127.0.0.1:2999`). Detecta kills, multikills, ace, primera sangre, robos y objetivos, y victoria.

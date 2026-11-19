@@ -1,7 +1,8 @@
 const api = window.muninn;
 const $ = (id) => document.getElementById(id);
 
-const GAME_NAMES = { lol: 'League of Legends', valorant: 'Valorant', desktop: 'Escritorio' };
+const GAME_NAMES = { lol: 'League of Legends', valorant: 'Valorant', desktop: 'Escritorio', mix: 'Varios juegos' };
+const GIF_MAX_SECONDS = 15;
 const ENCODER_NAMES = {
   auto: 'Automático (mejor disponible)',
   h264_nvenc: 'NVIDIA NVENC H.264',
@@ -17,6 +18,8 @@ let view = 'clips';
 let current = null;
 let trimIn = null;
 let trimOut = null;
+let selecting = false; // modo "elegir vídeos para un montaje"
+let selected = [];     // ids en el orden en que se eligieron
 
 // ---------- utilidades ----------
 
@@ -111,7 +114,7 @@ async function loadLibrary() {
 // Partida y clips se relacionan por tiempo: un clip pertenece a la partida del mismo juego que
 // estaba grabándose cuando ocurrió. Así funciona también con lo grabado antes de esta versión.
 function matchOf(clip) {
-  if (!clip || clip.type === 'match') return null;
+  if (!clip || clip.type === 'match' || clip.montage) return null;
   return items.find((m) => m.type === 'match' && m.game === clip.game
     && clip.createdAt >= m.createdAt - 2000 && clip.createdAt <= m.createdAt + m.duration * 1000) || null;
 }
@@ -155,16 +158,19 @@ function visibleItems() {
 function renderGrid() {
   const list = visibleItems();
   const grid = $('grid');
+  grid.classList.toggle('selecting', selecting);
   grid.replaceChildren(...list.map((it) => {
     const nClips = it.type === 'match' ? clipsOf(it).length : 0;
+    const order = selecting ? selected.indexOf(it.id) + 1 : 0;
     const thumb = el('div', { class: 'thumb' },
       it.favorite ? el('span', { class: 'fav' }, '★') : null,
       nClips ? el('span', { class: 'count' }, `${nClips} clip${nClips > 1 ? 's' : ''}`) : null,
+      order ? el('span', { class: 'order' }, String(order)) : null,
       el('span', { class: 'game' }, GAME_NAMES[it.game] || it.game),
       el('span', { class: 'dur' }, fmtDur(it.duration)));
     if (it.thumbUrl) thumb.style.backgroundImage = `url("${it.thumbUrl}")`;
     const stats = statsLine(it);
-    return el('div', { class: 'card', onclick: () => openItem(it) },
+    return el('div', { class: `card${order ? ' selected' : ''}`, onclick: () => (selecting ? toggleSelect(it) : openItem(it)) },
       thumb,
       el('div', { class: 'card-body' },
         el('div', { class: 'card-title', title: it.title }, it.title),
@@ -172,6 +178,58 @@ function renderGrid() {
         el('div', { class: 'card-meta' }, el('span', {}, fmtDate(it.createdAt)), el('span', {}, fmtBytes(it.size)))));
   }));
   $('empty').classList.toggle('hidden', list.length > 0);
+}
+
+// ---------- montaje ----------
+
+function setSelecting(on) {
+  selecting = on;
+  selected = [];
+  $('selbar').classList.toggle('hidden', !on);
+  $('btn-select').classList.toggle('hidden', on);
+  updateSelbar();
+  renderGrid();
+}
+
+function toggleSelect(it) {
+  const i = selected.indexOf(it.id);
+  if (i >= 0) selected.splice(i, 1); else selected.push(it.id);
+  updateSelbar();
+  renderGrid();
+}
+
+function updateSelbar() {
+  const chosen = selected.map((id) => items.find((x) => x.id === id)).filter(Boolean);
+  const total = chosen.reduce((s, x) => s + (x.duration || 0), 0);
+  $('sel-text').textContent = chosen.length
+    ? `${chosen.length} vídeo${chosen.length > 1 ? 's' : ''} · ${fmtDur(total)} · haz clic para quitar o añadir`
+    : 'Haz clic en los vídeos en el orden en que quieres que salgan';
+  $('sel-create').disabled = chosen.length < 2;
+}
+
+async function createMontage() {
+  const btn = $('sel-create');
+  const ids = [...selected];
+  btn.disabled = true;
+  btn.textContent = 'Creando montaje…';
+  $('sel-cancel').disabled = true;
+  try {
+    const it = await api.invoke('library:montage', ids, { fade: $('sel-fade').checked ? 0.5 : 0 });
+    setSelecting(false);
+    if (view === 'matches' || view === 'favorites') setView('clips');
+    await loadLibrary();
+    openItem(items.find((x) => x.id === it.id) || it);
+  } catch (e) {
+    alert(`No se pudo crear el montaje: ${cleanError(e)}`);
+  } finally {
+    btn.textContent = 'Crear montaje';
+    $('sel-cancel').disabled = false;
+    updateSelbar();
+  }
+}
+
+function cleanError(e) {
+  return String(e.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
 }
 
 function setView(v) {
@@ -291,6 +349,7 @@ function openItem(it, { select } = {}) {
   if (select) video().addEventListener('loadedmetadata', () => { video().currentTime = select[0]; }, { once: true });
   $('m-fav').textContent = it.favorite ? '★ Favorito' : '☆ Favorito';
   $('m-discord').textContent = 'Discord';
+  $('m-gif').textContent = 'GIF';
   updateTrim();
   renderContext();
   renderTimeline();
@@ -342,6 +401,13 @@ function updateTrim() {
   $('m-trim').textContent = ok ? `Crear recorte (${fmtDur(trimOut - trimIn)})` : 'Crear recorte';
   $('m-preview').disabled = !ok;
   $('m-clear').disabled = trimIn == null && trimOut == null;
+  $('m-slow').disabled = !ok;
+  // GIF: el tramo seleccionado, o el vídeo entero si es corto.
+  const gifLen = ok ? trimOut - trimIn : duration();
+  $('m-gif').disabled = !(gifLen > 0.3 && gifLen <= GIF_MAX_SECONDS + 0.01);
+  $('m-gif').title = gifLen > GIF_MAX_SECONDS
+    ? `Selecciona un tramo de ${GIF_MAX_SECONDS} s como mucho para hacer un GIF`
+    : 'GIF del tramo seleccionado (o del vídeo entero si es corto), copiado para pegar';
   const sel = $('m-sel');
   sel.classList.toggle('hidden', trimIn == null || trimOut == null);
   if (trimIn != null && trimOut != null) {
@@ -617,6 +683,40 @@ $('m-note').addEventListener('click', openNoteBox);
 $('m-note-save').addEventListener('click', saveNote);
 $('m-note-cancel').addEventListener('click', closeNoteBox);
 $('m-note-text').addEventListener('keydown', (e) => { if (e.key === 'Enter') saveNote(); });
+$('btn-select').addEventListener('click', () => setSelecting(true));
+$('sel-cancel').addEventListener('click', () => setSelecting(false));
+$('sel-create').addEventListener('click', createMontage);
+$('m-slow').addEventListener('click', async () => {
+  const btn = $('m-slow');
+  btn.disabled = true;
+  btn.textContent = 'Creando…';
+  try {
+    const it = await api.invoke('library:slowmo', current.id, trimIn, trimOut, Number($('m-speed').value));
+    await loadLibrary();
+    openItem(items.find((x) => x.id === it.id) || it);
+  } catch (e) {
+    alert(`No se pudo crear la cámara lenta: ${cleanError(e)}`);
+  } finally {
+    btn.textContent = 'Cámara lenta';
+    updateTrim();
+  }
+});
+$('m-gif').addEventListener('click', async () => {
+  const btn = $('m-gif');
+  const it = current;
+  const ok = trimIn != null && trimOut != null && trimOut - trimIn >= 1;
+  btn.disabled = true;
+  btn.textContent = 'Creando GIF…';
+  try {
+    const { size } = await api.invoke('library:gif', it.id, ok ? trimIn : 0, ok ? trimOut : duration());
+    if (current === it) btn.textContent = `GIF copiado (${(size / 1048576).toFixed(1)} MB)`;
+  } catch (e) {
+    if (current === it) btn.textContent = 'GIF';
+    alert(`No se pudo crear el GIF: ${cleanError(e)}`);
+  } finally {
+    updateTrim();
+  }
+});
 $('m-discord').addEventListener('click', async () => {
   const btn = $('m-discord');
   const it = current;

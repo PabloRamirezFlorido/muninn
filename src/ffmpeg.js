@@ -64,4 +64,32 @@ function forgetEncoders(cacheFile) {
   fs.rmSync(cacheFile, { force: true });
 }
 
-module.exports = { FFMPEG, run, detectEncoders, cachedEncoders, forgetEncoders };
+/** Duración, resolución y si tiene audio (leído de la cabecera que imprime ffmpeg -i). */
+function probe(file) {
+  return new Promise((resolve, reject) => {
+    const p = spawn(FFMPEG, ['-hide_banner', '-i', file], { windowsHide: true });
+    let err = '';
+    p.stderr.on('data', (d) => { err += d; });
+    p.on('error', reject);
+    p.on('close', () => {
+      const dur = err.match(/Duration: (\d+):(\d+):([\d.]+)/);
+      const vid = err.match(/Stream #\d+:\d+.*Video:.*?(\d{2,5})x(\d{2,5})/);
+      if (!dur || !vid) return reject(new Error(`No se pudo leer el vídeo: ${path.basename(file)}`));
+      resolve({
+        duration: Number(dur[1]) * 3600 + Number(dur[2]) * 60 + Number(dur[3]),
+        width: Number(vid[1]),
+        height: Number(vid[2]),
+        hasAudio: /Stream #\d+:\d+.*Audio:/.test(err),
+      });
+    });
+  });
+}
+
+/** Parámetros de vídeo para las ediciones (montaje, cámara lenta): calidad alta, no tamaño. */
+function editVideoArgs(encoder) {
+  if (encoder.endsWith('_nvenc')) return ['-c:v', encoder, '-preset', 'p5', '-rc', 'vbr', '-cq', '21', '-b:v', '0', '-maxrate', '40M', '-bufsize', '80M'];
+  if (encoder === 'libx264') return ['-c:v', 'libx264', '-preset', 'fast', '-crf', '20'];
+  return ['-c:v', encoder, '-b:v', '16M'];
+}
+
+module.exports = { FFMPEG, run, detectEncoders, cachedEncoders, forgetEncoders, probe, editVideoArgs };

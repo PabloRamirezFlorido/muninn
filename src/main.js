@@ -304,6 +304,15 @@ function pushStatus() {
   if (mainWin && !mainWin.isDestroyed() && mainWin.isVisible()) mainWin.webContents.send('status', status());
 }
 
+/** Deja el archivo en el portapapeles para pegarlo directamente en Discord u otro chat (Ctrl+V). */
+function copyFileToClipboard(file) {
+  return new Promise((resolve) => {
+    const quoted = `'${file.replace(/'/g, "''")}'`; // comillas simples de PowerShell
+    require('child_process').execFile('powershell', ['-NoProfile', '-Command', `Set-Clipboard -LiteralPath ${quoted}`],
+      { windowsHide: true }, () => resolve());
+  });
+}
+
 function serialize(it) {
   return { ...it, fileUrl: pathToFileURL(it.file).href, thumbUrl: it.thumb ? pathToFileURL(it.thumb).href : null };
 }
@@ -325,14 +334,25 @@ function setupIpc() {
   ipcMain.handle('library:discord', async (_e, id) => {
     await encodersReady;
     const { file, size } = await library.exportForDiscord(id, Number(S().discordLimitMB) || 10, chooseEncoder());
-    // Se deja el archivo en el portapapeles para pegarlo directamente en Discord (Ctrl+V).
-    await new Promise((resolve) => {
-      const quoted = `'${file.replace(/'/g, "''")}'`; // comillas simples de PowerShell
-      require('child_process').execFile('powershell', ['-NoProfile', '-Command', `Set-Clipboard -LiteralPath ${quoted}`],
-        { windowsHide: true }, () => resolve());
-    });
+    await copyFileToClipboard(file);
     log('exportado para Discord', path.basename(file), size);
     return { file, size };
+  });
+  ipcMain.handle('library:gif', async (_e, id, start, end) => {
+    const { file, size } = await library.exportGif(id, start, end);
+    await copyFileToClipboard(file);
+    log('GIF', path.basename(file), size);
+    return { file, size };
+  });
+  ipcMain.handle('library:montage', async (_e, ids, opts) => {
+    await encodersReady;
+    const it = await library.montage(ids, chooseEncoder(), opts);
+    log('montaje', it.title, ids.length);
+    return serialize(it);
+  });
+  ipcMain.handle('library:slowmo', async (_e, id, start, end, factor) => {
+    await encodersReady;
+    return serialize(await library.slowMotion(id, start, end, factor, chooseEncoder()));
   });
   ipcMain.handle('library:reveal-file', (_e, file) => shell.showItemInFolder(file));
   ipcMain.handle('library:open-folder', () => shell.openPath(S().libraryDir));

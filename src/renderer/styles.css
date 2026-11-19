@@ -189,7 +189,25 @@ video { width: 100%; max-height: 58vh; background: #000; border-radius: 8px; }
 button.chip { cursor: pointer; }
 button.chip:hover { border-color: var(--accent); }
 .modal-foot { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.trim, .modal-actions { display: flex; align-items: center; gap: 8px; }
+.trim, .modal-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.trim .sep { width: 1px; height: 22px; background: var(--line-strong); margin: 0 2px; }
+.small-select { padding: 5px 6px; font-size: 12.5px; }
+
+/* ---- montaje: selección múltiple ---- */
+.selbar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; padding: 10px 14px;
+  background: var(--panel-2); border: 1px solid var(--line-strong); border-radius: var(--radius);
+}
+.selbar #sel-text { flex: 1; min-width: 200px; }
+.sel-fade { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12.5px; }
+.sel-fade input { accent-color: var(--accent); }
+.grid.selecting .card { cursor: copy; }
+.card.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.thumb .order {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 40px; height: 40px; border-radius: 50%;
+  background: var(--accent); color: #04161c; font-weight: 700; font-size: 18px; display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 0 3px rgba(0,0,0,.4);
+}
 
 /* ---- estadísticas, partida y clips relacionados, notas ---- */
 .context { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-height: 0; }
