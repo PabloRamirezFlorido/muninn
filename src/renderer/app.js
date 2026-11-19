@@ -823,6 +823,7 @@ api.on('library:changed', loadLibrary);
 
 (async () => {
   state = await api.invoke('state:get');
+  $('app-version').textContent = `Versión ${state.version}`;
   renderStatus(state.status);
   await loadLibrary();
 })();
