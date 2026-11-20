@@ -167,6 +167,9 @@ class LolClient extends EventEmitter {
       }
       const events = data.Events || [];
       if (!this.inMatch) {
+        // Tras la victoria/derrota la API sigue respondiendo unos segundos (pantalla final):
+        // no es una partida nueva. Hasta que desaparezca, sus eventos incluyen GameEnd.
+        if (events.some((e) => e.EventName === 'GameEnd')) return;
         const me = await getJson('https://127.0.0.1:2999/liveclientdata/activeplayername');
         const players = await getJson('https://127.0.0.1:2999/liveclientdata/playerlist').catch(() => []);
         this.me = norm(me);

@@ -483,6 +483,7 @@ app.whenReady().then(() => {
   });
   director.on('failed', (e) => { log('error guardando', e.message); toast('No se pudo guardar', e.message, 'error'); });
   director.on('match', () => pushStatus());
+  director.on('discarded', (m) => log('partida descartada por corta', m.game, `${Math.round((Date.now() - m.startedAt) / 1000)} s`));
   library.on('pruned', (items) => {
     sendToMain('library:changed');
     toast('Espacio liberado', `Se borraron ${items.length} vídeo(s) antiguos por la cuota`, 'info');

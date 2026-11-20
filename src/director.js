@@ -5,6 +5,7 @@ const GAP_MS = 3000; // eventos separados por menos de esto acaban en el mismo c
 // kill si la siguiente kill llega en ~10 s. Sin esta espera, la segunda kill abría un clip nuevo
 // que volvía a incluir la primera (metraje duplicado).
 const CHAIN_MS = 12000;
+const MIN_MATCH_MS = 60000; // partidas más cortas no se guardan (falsos inicios)
 
 /**
  * Decide qué se guarda: une eventos cercanos en un único clip (p. ej. kill + kill + doble kill),
@@ -52,6 +53,8 @@ class Director extends EventEmitter {
     this.match = null;
     this.emit('match', null);
     if (this.pending) this.flush();
+    // Seguro: ninguna partida real dura menos de un minuto; algo así es un falso inicio.
+    if (Date.now() - m.startedAt < MIN_MATCH_MS) { this.recorder.unpin('match'); this.emit('discarded', m); return; }
     if (!this.getSettings().saveFullMatches) { this.recorder.unpin('match'); return; }
 
     const label = info.result === 'win' ? 'Victoria' : info.result === 'loss' ? 'Derrota' : 'Partida';
